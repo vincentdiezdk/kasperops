@@ -9,6 +9,7 @@ import { MapPin, Navigation, Clock, ExternalLink, Home } from "lucide-react";
 import { getStatusLabel, getStatusColor, formatDate } from "@/lib/formatters";
 import type { Job } from "@shared/schema";
 
+
 interface RouteStop extends Job {
   stopNumber: number;
   estimatedArrival: string;
@@ -42,42 +43,63 @@ export default function RoutePlanningPage() {
     queryKey: [`/api/route/daily?date=${selectedDate}`],
   });
 
-  // Initialize Leaflet map
+  // Load Leaflet from CDN
   useEffect(() => {
+    if (document.getElementById('leaflet-css')) return;
+    const link = document.createElement('link');
+    link.id = 'leaflet-css';
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+
+    if (!document.getElementById('leaflet-js')) {
+      const script = document.createElement('script');
+      script.id = 'leaflet-js';
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  // Initialize Leaflet map when routeData arrives (the map div is conditionally rendered)
+  useEffect(() => {
+    if (!routeData || routeData.stops.length === 0) return;
     if (!mapRef.current) return;
 
-    let L: any;
-    let map: any;
-
-    const initMap = async () => {
-      // Dynamic import of leaflet
-      L = await import("leaflet");
-      await import("leaflet/dist/leaflet.css");
+    const tryInit = () => {
+      const Lf = (window as any).L;
+      if (!Lf) {
+        setTimeout(tryInit, 200);
+        return;
+      }
 
       // Fix default icon paths
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      delete (Lf.Icon.Default.prototype as any)._getIconUrl;
+      Lf.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
       });
 
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
       }
 
-      map = L.map(mapRef.current!).setView([56.1246, 10.1916], 7);
+      const map = Lf.map(mapRef.current!).setView([56.1246, 10.1916], 7);
       mapInstanceRef.current = map;
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      Lf.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(map);
+
+      setTimeout(() => {
+        map.invalidateSize();
+        updateMapMarkers(Lf, map, routeData);
+      }, 300);
     };
 
-    initMap().then(() => {
-      if (!routeData || !L || !map) return;
-      updateMapMarkers(L, map, routeData);
-    });
+    // Small delay to ensure DOM is painted
+    setTimeout(tryInit, 100);
 
     return () => {
       if (mapInstanceRef.current) {
@@ -85,21 +107,13 @@ export default function RoutePlanningPage() {
         mapInstanceRef.current = null;
       }
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Update markers when route data changes
-  useEffect(() => {
-    if (!routeData || !mapInstanceRef.current) return;
-
-    import("leaflet").then((L) => {
-      updateMapMarkers(L, mapInstanceRef.current, routeData);
-    });
   }, [routeData]);
 
-  function updateMapMarkers(L: any, map: any, data: RouteData) {
-    // Clear existing layers
+  function updateMapMarkers(Lf: any, map: any, data: RouteData) {
+    // Clear existing marker/polyline layers
     map.eachLayer((layer: any) => {
-      if (layer instanceof L.Marker || layer instanceof L.Polyline) {
+      if (!(layer as any)._url) {
+        // Keep tile layers, remove everything else
         map.removeLayer(layer);
       }
     });
@@ -108,7 +122,7 @@ export default function RoutePlanningPage() {
     const routePoints: [number, number][] = [];
 
     // Home base marker
-    const homeIcon = L.divIcon({
+    const homeIcon = Lf.divIcon({
       className: "custom-div-icon",
       html: `<div style="background:#2d6a2d;color:white;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:12px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3);">H</div>`,
       iconSize: [28, 28],
@@ -116,7 +130,7 @@ export default function RoutePlanningPage() {
     });
 
     const homeLatLng: [number, number] = [data.homeBase.lat, data.homeBase.lng];
-    L.marker(homeLatLng, { icon: homeIcon })
+    Lf.marker(homeLatLng, { icon: homeIcon })
       .addTo(map)
       .bindPopup(`<b>${data.homeBase.label}</b><br/>Hjemmebase`);
     bounds.push(homeLatLng);
@@ -126,13 +140,13 @@ export default function RoutePlanningPage() {
     for (const stop of data.stops) {
       if (stop.latitude && stop.longitude) {
         const latLng: [number, number] = [stop.latitude, stop.longitude];
-        const icon = L.divIcon({
+        const icon = Lf.divIcon({
           className: "custom-div-icon",
           html: `<div style="background:#1a5c1a;color:white;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:13px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3);">${stop.stopNumber}</div>`,
           iconSize: [28, 28],
           iconAnchor: [14, 14],
         });
-        L.marker(latLng, { icon })
+        Lf.marker(latLng, { icon })
           .addTo(map)
           .bindPopup(`<b>${stop.stopNumber}. ${stop.title}</b><br/>${stop.customerName}<br/>ca. ${stop.estimatedArrival} · ~${stop.estimatedDuration} min`);
         bounds.push(latLng);
@@ -145,7 +159,7 @@ export default function RoutePlanningPage() {
 
     // Route polyline
     if (routePoints.length > 1) {
-      L.polyline(routePoints, { color: "#2d6a2d", weight: 3, opacity: 0.7, dashArray: "8, 8" }).addTo(map);
+      Lf.polyline(routePoints, { color: "#2d6a2d", weight: 3, opacity: 0.7, dashArray: "8, 8" }).addTo(map);
     }
 
     // Fit bounds
