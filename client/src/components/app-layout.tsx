@@ -12,6 +12,8 @@ import {
   Moon,
   Menu,
   X,
+  Receipt,
+  FileCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/hooks/use-theme";
@@ -22,7 +24,9 @@ const navItems = [
   { href: "/customers", label: "Kunder", icon: Users },
   { href: "/quotes", label: "Tilbud", icon: FileText },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
+  { href: "/invoices", label: "Fakturaer", icon: Receipt },
   { href: "/prices", label: "Priskatalog", icon: Tag },
+  { href: "/agreements", label: "Aftaler", icon: FileCheck },
   { href: "/settings", label: "Indstillinger", icon: Settings },
 ];
 

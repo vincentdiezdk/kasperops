@@ -24,8 +24,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { formatDate, getStatusLabel, getStatusColor } from "@/lib/formatters";
+import { downloadCSV } from "@/lib/csv-export";
 import type { Job, Customer } from "@shared/schema";
 
 const statusFilters = ["all", "planned", "in_progress", "completed", "cancelled"] as const;
@@ -130,9 +131,29 @@ export default function JobsPage() {
           <h1 className="text-2xl font-bold">Jobs</h1>
           <p className="text-muted-foreground">{jobs.length} jobs i alt</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)} data-testid="add-job-btn">
-          <Plus className="h-4 w-4 mr-2" />Opret job
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => {
+            const exportData = filtered.map(j => ({
+              title: j.title,
+              customer: getCustomerName(j.customerId),
+              date: formatDate(j.scheduledDate),
+              address: [j.addressLine1, j.postalCode, j.city].filter(Boolean).join(", "),
+              status: getStatusLabel(j.status),
+            }));
+            downloadCSV(exportData, [
+              { key: "title", header: "Titel" },
+              { key: "customer", header: "Kunde" },
+              { key: "date", header: "Dato" },
+              { key: "address", header: "Adresse" },
+              { key: "status", header: "Status" },
+            ], "jobs.csv");
+          }} data-testid="export-csv-btn">
+            <Download className="h-4 w-4 mr-2" />CSV
+          </Button>
+          <Button onClick={() => setDialogOpen(true)} data-testid="add-job-btn">
+            <Plus className="h-4 w-4 mr-2" />Opret job
+          </Button>
+        </div>
       </div>
 
       {/* View tabs: Liste | Kalender */}

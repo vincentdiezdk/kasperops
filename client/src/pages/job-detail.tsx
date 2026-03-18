@@ -32,7 +32,7 @@ import { Link } from "wouter";
 import { ArrowLeft, MapPin, Calendar, Play, CheckCircle, XCircle, Upload, Trash2, Camera, FileText } from "lucide-react";
 import { formatDate, formatDateTime, getStatusLabel, getStatusColor } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import type { Job, Customer, JobPhoto, Quote } from "@shared/schema";
+import type { Job, Customer, JobPhoto, Quote, Invoice } from "@shared/schema";
 
 export default function JobDetailPage() {
   const [, params] = useRoute("/jobs/:id");
@@ -58,9 +58,11 @@ export default function JobDetailPage() {
     enabled: !!jobId,
   });
   const { data: quotes = [] } = useQuery<Quote[]>({ queryKey: ["/api/quotes"] });
+  const { data: allInvoices = [] } = useQuery<Invoice[]>({ queryKey: ["/api/invoices"] });
 
   const customer = job ? customers.find(c => c.id === job.customerId) : null;
   const linkedQuote = job?.quoteId ? quotes.find(q => q.id === job.quoteId) : null;
+  const linkedInvoice = job ? allInvoices.find(i => i.jobId === job.id) : null;
 
   const beforePhotos = photos.filter(p => p.type === "before");
   const duringPhotos = photos.filter(p => p.type === "during");
@@ -414,6 +416,15 @@ export default function JobDetailPage() {
                 Tilbud:{" "}
                 <Link href={`/quotes/${linkedQuote.id}`} className="text-primary hover:underline" data-testid="job-quote-link">
                   {linkedQuote.title}
+                </Link>
+              </div>
+            )}
+            {linkedInvoice && (
+              <div className="flex items-center gap-2 text-sm">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                Faktura:{" "}
+                <Link href={`/invoices/${linkedInvoice.id}`} className="text-primary hover:underline" data-testid="job-invoice-link">
+                  {linkedInvoice.invoiceNumber}
                 </Link>
               </div>
             )}

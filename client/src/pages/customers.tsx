@@ -22,8 +22,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Download } from "lucide-react";
 import { formatDate } from "@/lib/formatters";
+import { downloadCSV } from "@/lib/csv-export";
 import type { Customer } from "@shared/schema";
 
 export default function CustomersPage() {
@@ -66,9 +67,29 @@ export default function CustomersPage() {
           <h1 className="text-2xl font-bold">Kunder</h1>
           <p className="text-muted-foreground">{customers.length} kunder i alt</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)} data-testid="add-customer-btn">
-          <Plus className="h-4 w-4 mr-2" />Opret kunde
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => {
+            const exportData = filtered.map(c => ({
+              name: c.name,
+              email: c.email || "",
+              phone: c.phone || "",
+              city: c.city || "",
+              created: formatDate(c.createdAt),
+            }));
+            downloadCSV(exportData, [
+              { key: "name", header: "Navn" },
+              { key: "email", header: "Email" },
+              { key: "phone", header: "Telefon" },
+              { key: "city", header: "By" },
+              { key: "created", header: "Oprettet" },
+            ], "kunder.csv");
+          }} data-testid="export-csv-btn">
+            <Download className="h-4 w-4 mr-2" />CSV
+          </Button>
+          <Button onClick={() => setDialogOpen(true)} data-testid="add-customer-btn">
+            <Plus className="h-4 w-4 mr-2" />Opret kunde
+          </Button>
+        </div>
       </div>
 
       <div className="relative max-w-sm">

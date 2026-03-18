@@ -97,6 +97,63 @@ export const jobPhotos = pgTable("job_photos", {
   uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
 });
 
+// Invoices
+export const invoices = pgTable("invoices", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id"),
+  customerId: integer("customer_id").notNull(),
+  invoiceNumber: text("invoice_number").notNull(),
+  status: text("status").notNull().default("draft"),
+  issueDate: timestamp("issue_date").defaultNow().notNull(),
+  dueDate: timestamp("due_date").notNull(),
+  totalAmount: doublePrecision("total_amount").notNull(),
+  paidAt: timestamp("paid_at"),
+  paidAmount: doublePrecision("paid_amount"),
+  dineroGuid: text("dinero_guid"),
+  reminderCount: integer("reminder_count").notNull().default(0),
+  lastReminderAt: timestamp("last_reminder_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Invoice lines
+export const invoiceLines = pgTable("invoice_lines", {
+  id: serial("id").primaryKey(),
+  invoiceId: integer("invoice_id").notNull(),
+  description: text("description").notNull(),
+  quantity: doublePrecision("quantity").notNull().default(1),
+  unitLabel: text("unit_label").notNull().default("stk"),
+  unitPrice: doublePrecision("unit_price").notNull(),
+  lineTotal: doublePrecision("line_total").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
+// Payment reminders log
+export const paymentReminders = pgTable("payment_reminders", {
+  id: serial("id").primaryKey(),
+  invoiceId: integer("invoice_id").notNull(),
+  reminderNumber: integer("reminder_number").notNull(),
+  sentAt: timestamp("sent_at").defaultNow().notNull(),
+  type: text("type").notNull().default("email"),
+  status: text("status").notNull().default("sent"),
+});
+
+// Service agreements
+export const serviceAgreements = pgTable("service_agreements", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  frequency: text("frequency").notNull(),
+  pricePerVisit: doublePrecision("price_per_visit").notNull(),
+  nextServiceDate: timestamp("next_service_date"),
+  status: text("status").notNull().default("active"),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Communication log
 export const communications = pgTable("communications", {
   id: serial("id").primaryKey(),
@@ -119,6 +176,10 @@ export const insertQuoteLineSchema = createInsertSchema(quoteLines).omit({ id: t
 export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true });
 export const insertJobPhotoSchema = createInsertSchema(jobPhotos).omit({ id: true, uploadedAt: true });
 export const insertCommunicationSchema = createInsertSchema(communications).omit({ id: true });
+export const insertInvoiceSchema = createInsertSchema(invoices).omit({ id: true, createdAt: true });
+export const insertInvoiceLineSchema = createInsertSchema(invoiceLines).omit({ id: true });
+export const insertPaymentReminderSchema = createInsertSchema(paymentReminders).omit({ id: true });
+export const insertServiceAgreementSchema = createInsertSchema(serviceAgreements).omit({ id: true, createdAt: true });
 
 // Types
 export type User = typeof users.$inferSelect;
@@ -137,3 +198,11 @@ export type JobPhoto = typeof jobPhotos.$inferSelect;
 export type InsertJobPhoto = z.infer<typeof insertJobPhotoSchema>;
 export type Communication = typeof communications.$inferSelect;
 export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
+export type Invoice = typeof invoices.$inferSelect;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type InvoiceLine = typeof invoiceLines.$inferSelect;
+export type InsertInvoiceLine = z.infer<typeof insertInvoiceLineSchema>;
+export type PaymentReminder = typeof paymentReminders.$inferSelect;
+export type InsertPaymentReminder = z.infer<typeof insertPaymentReminderSchema>;
+export type ServiceAgreement = typeof serviceAgreements.$inferSelect;
+export type InsertServiceAgreement = z.infer<typeof insertServiceAgreementSchema>;

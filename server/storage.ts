@@ -7,6 +7,10 @@ import {
   type Job, type InsertJob,
   type JobPhoto, type InsertJobPhoto,
   type Communication, type InsertCommunication,
+  type Invoice, type InsertInvoice,
+  type InvoiceLine, type InsertInvoiceLine,
+  type PaymentReminder, type InsertPaymentReminder,
+  type ServiceAgreement, type InsertServiceAgreement,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -59,6 +63,26 @@ export interface IStorage {
   // Communications
   getCommunications(customerId?: number): Promise<Communication[]>;
   createCommunication(comm: InsertCommunication): Promise<Communication>;
+
+  // Invoices
+  getInvoices(): Promise<Invoice[]>;
+  getInvoice(id: number): Promise<Invoice | undefined>;
+  createInvoice(invoice: InsertInvoice): Promise<Invoice>;
+  updateInvoice(id: number, invoice: Partial<InsertInvoice>): Promise<Invoice | undefined>;
+
+  // Invoice Lines
+  getInvoiceLines(invoiceId: number): Promise<InvoiceLine[]>;
+  createInvoiceLine(line: InsertInvoiceLine): Promise<InvoiceLine>;
+
+  // Payment Reminders
+  getPaymentReminders(invoiceId: number): Promise<PaymentReminder[]>;
+  createPaymentReminder(reminder: InsertPaymentReminder): Promise<PaymentReminder>;
+
+  // Service Agreements
+  getServiceAgreements(): Promise<ServiceAgreement[]>;
+  getServiceAgreement(id: number): Promise<ServiceAgreement | undefined>;
+  createServiceAgreement(agreement: InsertServiceAgreement): Promise<ServiceAgreement>;
+  updateServiceAgreement(id: number, agreement: Partial<InsertServiceAgreement>): Promise<ServiceAgreement | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -70,8 +94,13 @@ export class MemStorage implements IStorage {
   private jobs: Map<number, Job> = new Map();
   private jobPhotosMap: Map<number, JobPhoto> = new Map();
   private communications: Map<number, Communication> = new Map();
+  private invoicesMap: Map<number, Invoice> = new Map();
+  private invoiceLinesMap: Map<number, InvoiceLine> = new Map();
+  private paymentRemindersMap: Map<number, PaymentReminder> = new Map();
+  private serviceAgreementsMap: Map<number, ServiceAgreement> = new Map();
 
-  private nextId = { users: 1, customers: 1, priceItems: 1, quotes: 1, quoteLines: 1, jobs: 1, jobPhotos: 1, communications: 1 };
+  private nextId = { users: 1, customers: 1, priceItems: 1, quotes: 1, quoteLines: 1, jobs: 1, jobPhotos: 1, communications: 1, invoices: 1, invoiceLines: 1, paymentReminders: 1, serviceAgreements: 1 };
+  private invoiceCounter = 0;
 
   constructor() {
     this.seed();
@@ -126,6 +155,36 @@ export class MemStorage implements IStorage {
     this.createCommunication({ customerId: 2, jobId: null, quoteId: null, type: "email", direction: "outbound", subject: "Bekræftelse af vinduespudsning", body: "Kære Birthe, hermed bekræftes vinduespudsning d. 15. marts." });
     this.createCommunication({ customerId: 3, jobId: null, quoteId: 3, type: "email", direction: "outbound", subject: "Tilbud: Komplet haveservice", body: "Kære Carl, hermed fremsendes tilbud på komplet haveservice." });
     this.createCommunication({ customerId: 3, jobId: null, quoteId: 3, type: "phone", direction: "inbound", subject: "Tilbud accepteret", body: "Carl accepterede tilbuddet per telefon." });
+
+    // Seed invoices
+    this.createInvoice({ jobId: 3, customerId: 2, invoiceNumber: "KMH-2026-0001", status: "paid", issueDate: new Date("2026-01-15"), dueDate: new Date("2026-01-29"), totalAmount: 3750, paidAt: new Date("2026-01-25"), paidAmount: 3750, dineroGuid: null, reminderCount: 0, lastReminderAt: null, notes: "Vinduespudsning — betalt til tiden" });
+    this.createInvoice({ jobId: null, customerId: 1, invoiceNumber: "KMH-2026-0002", status: "paid", issueDate: new Date("2026-02-01"), dueDate: new Date("2026-02-15"), totalAmount: 8500, paidAt: new Date("2026-02-14"), paidAmount: 8500, dineroGuid: null, reminderCount: 0, lastReminderAt: null, notes: null });
+    this.createInvoice({ jobId: null, customerId: 3, invoiceNumber: "KMH-2026-0003", status: "sent", issueDate: new Date("2026-03-01"), dueDate: new Date("2026-03-15"), totalAmount: 6200, paidAt: null, paidAmount: null, dineroGuid: null, reminderCount: 0, lastReminderAt: null, notes: null });
+    this.createInvoice({ jobId: null, customerId: 1, invoiceNumber: "KMH-2026-0004", status: "overdue", issueDate: new Date("2026-02-15"), dueDate: new Date("2026-03-01"), totalAmount: 4500, paidAt: null, paidAmount: null, dineroGuid: null, reminderCount: 2, lastReminderAt: new Date("2026-03-12"), notes: "Algebehandling" });
+    this.createInvoice({ jobId: null, customerId: 2, invoiceNumber: "KMH-2026-0005", status: "draft", issueDate: new Date("2026-03-18"), dueDate: new Date("2026-04-01"), totalAmount: 2750, paidAt: null, paidAmount: null, dineroGuid: null, reminderCount: 0, lastReminderAt: null, notes: "Kladde — venter på godkendelse" });
+
+    // Seed invoice lines
+    this.createInvoiceLine({ invoiceId: 1, description: "Vinduespudsning ude/inde", quantity: 50, unitLabel: "stk", unitPrice: 75, lineTotal: 3750, sortOrder: 0 });
+    this.createInvoiceLine({ invoiceId: 2, description: "Algebehandling af tag", quantity: 100, unitLabel: "m²", unitPrice: 45, lineTotal: 4500, sortOrder: 0 });
+    this.createInvoiceLine({ invoiceId: 2, description: "Algebehandling af facade", quantity: 100, unitLabel: "m²", unitPrice: 40, lineTotal: 4000, sortOrder: 1 });
+    this.createInvoiceLine({ invoiceId: 3, description: "Hækklipning", quantity: 40, unitLabel: "meter", unitPrice: 35, lineTotal: 1400, sortOrder: 0 });
+    this.createInvoiceLine({ invoiceId: 3, description: "Græsslåning", quantity: 600, unitLabel: "m²", unitPrice: 8, lineTotal: 4800, sortOrder: 1 });
+    this.createInvoiceLine({ invoiceId: 4, description: "Algebehandling af tag", quantity: 100, unitLabel: "m²", unitPrice: 45, lineTotal: 4500, sortOrder: 0 });
+    this.createInvoiceLine({ invoiceId: 5, description: "Højtryksvask af fliser", quantity: 50, unitLabel: "m²", unitPrice: 55, lineTotal: 2750, sortOrder: 0 });
+
+    // Seed payment reminders
+    this.createPaymentReminder({ invoiceId: 4, reminderNumber: 1, sentAt: new Date("2026-03-05"), type: "email", status: "sent" });
+    this.createPaymentReminder({ invoiceId: 4, reminderNumber: 2, sentAt: new Date("2026-03-12"), type: "email", status: "sent" });
+
+    // Seed service agreements
+    this.createServiceAgreement({ customerId: 1, title: "Månedlig vinduespudsning — Nørregade 12", description: "Pudsning af alle vinduer ind- og udvendig, 1 gang per måned", frequency: "monthly", pricePerVisit: 1500, nextServiceDate: new Date("2026-04-01"), status: "active", startDate: new Date("2026-01-01"), endDate: null, notes: null });
+    this.createServiceAgreement({ customerId: 3, title: "Kvartalsvis haveservice — Søndergade 22", description: "Hækklipning og græsslåning hver kvartal", frequency: "quarterly", pricePerVisit: 3200, nextServiceDate: new Date("2026-04-15"), status: "active", startDate: new Date("2025-10-01"), endDate: null, notes: "Inkluderer ukrudtsbehandling" });
+    this.createServiceAgreement({ customerId: 2, title: "Årlig algebehandling — Vestergade 8", description: "Komplet algebehandling af tag og facade", frequency: "annual", pricePerVisit: 8500, nextServiceDate: new Date("2026-09-01"), status: "paused", startDate: new Date("2025-09-01"), endDate: null, notes: "Pauseret indtil videre pga. tagudskiftning" });
+
+    // Additional communications for invoice events
+    this.createCommunication({ customerId: 2, jobId: 3, quoteId: null, type: "email", direction: "outbound", subject: "Faktura KMH-2026-0001 — 3.750,00 kr.", body: "Faktura sendt for vinduespudsning." });
+    this.createCommunication({ customerId: 1, jobId: null, quoteId: null, type: "email", direction: "outbound", subject: "Rykker 1 — Faktura KMH-2026-0004", body: "Første rykker sendt for forfalden faktura." });
+    this.createCommunication({ customerId: 1, jobId: null, quoteId: null, type: "email", direction: "outbound", subject: "Rykker 2 — Faktura KMH-2026-0004", body: "Anden rykker sendt for forfalden faktura." });
   }
 
   // Users
@@ -297,6 +356,122 @@ export class MemStorage implements IStorage {
     const comm: Communication = { id, customerId: data.customerId, jobId: data.jobId ?? null, quoteId: data.quoteId ?? null, type: data.type, direction: data.direction, subject: data.subject ?? null, body: data.body ?? null, sentAt: new Date() };
     this.communications.set(id, comm);
     return comm;
+  }
+
+  // Invoices
+  async getInvoices(): Promise<Invoice[]> {
+    return Array.from(this.invoicesMap.values());
+  }
+  async getInvoice(id: number): Promise<Invoice | undefined> {
+    return this.invoicesMap.get(id);
+  }
+  async createInvoice(data: InsertInvoice): Promise<Invoice> {
+    const id = this.nextId.invoices++;
+    this.invoiceCounter++;
+    const invoice: Invoice = {
+      id,
+      jobId: data.jobId ?? null,
+      customerId: data.customerId,
+      invoiceNumber: data.invoiceNumber,
+      status: data.status ?? "draft",
+      issueDate: data.issueDate ?? new Date(),
+      dueDate: data.dueDate,
+      totalAmount: data.totalAmount,
+      paidAt: data.paidAt ?? null,
+      paidAmount: data.paidAmount ?? null,
+      dineroGuid: data.dineroGuid ?? null,
+      reminderCount: data.reminderCount ?? 0,
+      lastReminderAt: data.lastReminderAt ?? null,
+      notes: data.notes ?? null,
+      createdAt: new Date(),
+    };
+    this.invoicesMap.set(id, invoice);
+    return invoice;
+  }
+  async updateInvoice(id: number, data: Partial<InsertInvoice>): Promise<Invoice | undefined> {
+    const existing = this.invoicesMap.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...data };
+    this.invoicesMap.set(id, updated);
+    return updated;
+  }
+
+  // Invoice Lines
+  async getInvoiceLines(invoiceId: number): Promise<InvoiceLine[]> {
+    return Array.from(this.invoiceLinesMap.values()).filter(l => l.invoiceId === invoiceId).sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  async createInvoiceLine(data: InsertInvoiceLine): Promise<InvoiceLine> {
+    const id = this.nextId.invoiceLines++;
+    const line: InvoiceLine = {
+      id,
+      invoiceId: data.invoiceId,
+      description: data.description,
+      quantity: data.quantity ?? 1,
+      unitLabel: data.unitLabel ?? "stk",
+      unitPrice: data.unitPrice,
+      lineTotal: data.lineTotal,
+      sortOrder: data.sortOrder ?? 0,
+    };
+    this.invoiceLinesMap.set(id, line);
+    return line;
+  }
+
+  // Payment Reminders
+  async getPaymentReminders(invoiceId: number): Promise<PaymentReminder[]> {
+    return Array.from(this.paymentRemindersMap.values()).filter(r => r.invoiceId === invoiceId).sort((a, b) => a.reminderNumber - b.reminderNumber);
+  }
+  async createPaymentReminder(data: InsertPaymentReminder): Promise<PaymentReminder> {
+    const id = this.nextId.paymentReminders++;
+    const reminder: PaymentReminder = {
+      id,
+      invoiceId: data.invoiceId,
+      reminderNumber: data.reminderNumber,
+      sentAt: data.sentAt ?? new Date(),
+      type: data.type ?? "email",
+      status: data.status ?? "sent",
+    };
+    this.paymentRemindersMap.set(id, reminder);
+    return reminder;
+  }
+
+  // Service Agreements
+  async getServiceAgreements(): Promise<ServiceAgreement[]> {
+    return Array.from(this.serviceAgreementsMap.values());
+  }
+  async getServiceAgreement(id: number): Promise<ServiceAgreement | undefined> {
+    return this.serviceAgreementsMap.get(id);
+  }
+  async createServiceAgreement(data: InsertServiceAgreement): Promise<ServiceAgreement> {
+    const id = this.nextId.serviceAgreements++;
+    const agreement: ServiceAgreement = {
+      id,
+      customerId: data.customerId,
+      title: data.title,
+      description: data.description ?? null,
+      frequency: data.frequency,
+      pricePerVisit: data.pricePerVisit,
+      nextServiceDate: data.nextServiceDate ?? null,
+      status: data.status ?? "active",
+      startDate: data.startDate,
+      endDate: data.endDate ?? null,
+      notes: data.notes ?? null,
+      createdAt: new Date(),
+    };
+    this.serviceAgreementsMap.set(id, agreement);
+    return agreement;
+  }
+  async updateServiceAgreement(id: number, data: Partial<InsertServiceAgreement>): Promise<ServiceAgreement | undefined> {
+    const existing = this.serviceAgreementsMap.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...data };
+    this.serviceAgreementsMap.set(id, updated);
+    return updated;
+  }
+
+  getNextInvoiceNumber(): string {
+    const year = new Date().getFullYear();
+    const num = this.invoiceCounter + 1;
+    return `KMH-${year}-${String(num).padStart(4, "0")}`;
   }
 }
 

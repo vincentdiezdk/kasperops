@@ -168,34 +168,6 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
-  // === Job Status ===
-  app.patch("/api/jobs/:id/status", async (req, res) => {
-    const id = Number(req.params.id);
-    const job = await storage.getJob(id);
-    if (!job) return res.status(404).json({ message: "Job ikke fundet" });
-
-    const { status, completionNotes } = req.body;
-    const updates: any = { status };
-
-    if (status === "in_progress") {
-      updates.startedAt = new Date().toISOString();
-    }
-    if (status === "completed") {
-      // Validate photo requirements
-      const photos = await storage.getJobPhotos(id);
-      const beforeCount = photos.filter(p => p.type === "before").length;
-      const afterCount = photos.filter(p => p.type === "after").length;
-      if (beforeCount < 2 || afterCount < 2) {
-        return res.status(400).json({ message: "Upload mindst 2 før-billeder og 2 efter-billeder" });
-      }
-      updates.completedAt = new Date().toISOString();
-      if (completionNotes) updates.completionNotes = completionNotes;
-    }
-
-    const updated = await storage.updateJob(id, updates);
-    res.json(updated);
-  });
-
   // === Quote Status ===
   app.patch("/api/quotes/:id/status", async (req, res) => {
     const id = Number(req.params.id);
@@ -264,10 +236,220 @@ export async function registerRoutes(
     res.status(201).json(comm);
   });
 
-  // === Dashboard stats ===
+  // === Invoices ===
+  app.get("/api/invoices", async (_req, res) => {
+    const invoices = await storage.getInvoices();
+    res.json(invoices);
+  });
+  app.get("/api/invoices/:id", async (req, res) => {
+    const invoice = await storage.getInvoice(Number(req.params.id));
+    if (!invoice) return res.status(404).json({ message: "Faktura ikke fundet" });
+    const lines = await storage.getInvoiceLines(invoice.id);
+    const reminders = await storage.getPaymentReminders(invoice.id);
+    res.json({ ...invoice, lines, reminders });
+  });
+  app.post("/api/invoices", async (req, res) => {
+    const invoiceNumber = req.body.invoiceNumber || storage.getNextInvoiceNumber();
+    const dueDate = req.body.dueDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+    const invoice = await storage.createInvoice({ ...req.body, invoiceNumber, dueDate });
+    // Create lines if provided
+    if (req.body.lines && Array.isArray(req.body.lines)) {
+      for (const line of req.body.lines) {
+        await storage.createInvoiceLine({ ...line, invoiceId: invoice.id });
+      }
+    }
+    res.status(201).json(invoice);
+  });
+  app.patch("/api/invoices/:id/status", async (req, res) => {
+    const id = Number(req.params.id);
+    const invoice = await storage.getInvoice(id);
+    if (!invoice) return res.status(404).json({ message: "Faktura ikke fundet" });
+    const { status } = req.body;
+    const updated = await storage.updateInvoice(id, { status });
+    res.json(updated);
+  });
+  app.post("/api/invoices/:id/pay", async (req, res) => {
+    const id = Number(req.params.id);
+    const invoice = await storage.getInvoice(id);
+    if (!invoice) return res.status(404).json({ message: "Faktura ikke fundet" });
+    const { amount, date } = req.body;
+    const updated = await storage.updateInvoice(id, {
+      status: "paid",
+      paidAt: date ? new Date(date) : new Date(),
+      paidAmount: amount ?? invoice.totalAmount,
+    });
+    // Communication log
+    const customer = await storage.getCustomer(invoice.customerId);
+    await storage.createCommunication({
+      customerId: invoice.customerId,
+      jobId: invoice.jobId,
+      quoteId: null,
+      type: "system",
+      direction: "internal",
+      subject: `Betaling registreret — ${invoice.invoiceNumber}`,
+      body: `Betaling på ${amount ?? invoice.totalAmount} kr. registreret.`,
+    });
+    res.json(updated);
+  });
+  app.post("/api/invoices/:id/reminder", async (req, res) => {
+    const id = Number(req.params.id);
+    const invoice = await storage.getInvoice(id);
+    if (!invoice) return res.status(404).json({ message: "Faktura ikke fundet" });
+    if (invoice.reminderCount >= 3) return res.status(400).json({ message: "Maksimalt 3 rykkere tilladt" });
+
+    const newCount = invoice.reminderCount + 1;
+    const now = new Date();
+    await storage.updateInvoice(id, {
+      reminderCount: newCount,
+      lastReminderAt: now,
+      status: "overdue",
+    });
+    const reminder = await storage.createPaymentReminder({
+      invoiceId: id,
+      reminderNumber: newCount,
+      sentAt: now,
+      type: "email",
+      status: "sent",
+    });
+    // Communication log
+    await storage.createCommunication({
+      customerId: invoice.customerId,
+      jobId: invoice.jobId,
+      quoteId: null,
+      type: "email",
+      direction: "outbound",
+      subject: `Rykker ${newCount} — ${invoice.invoiceNumber}`,
+      body: `Rykker nr. ${newCount} sendt for faktura ${invoice.invoiceNumber}.`,
+    });
+    const updated = await storage.getInvoice(id);
+    res.json({ invoice: updated, reminder });
+  });
+
+  // === Service Agreements ===
+  app.get("/api/agreements", async (_req, res) => {
+    const agreements = await storage.getServiceAgreements();
+    res.json(agreements);
+  });
+  app.get("/api/agreements/:id", async (req, res) => {
+    const agreement = await storage.getServiceAgreement(Number(req.params.id));
+    if (!agreement) return res.status(404).json({ message: "Aftale ikke fundet" });
+    res.json(agreement);
+  });
+  app.post("/api/agreements", async (req, res) => {
+    const agreement = await storage.createServiceAgreement(req.body);
+    res.status(201).json(agreement);
+  });
+  app.patch("/api/agreements/:id", async (req, res) => {
+    const agreement = await storage.updateServiceAgreement(Number(req.params.id), req.body);
+    if (!agreement) return res.status(404).json({ message: "Aftale ikke fundet" });
+    res.json(agreement);
+  });
+  app.patch("/api/agreements/:id/status", async (req, res) => {
+    const id = Number(req.params.id);
+    const agreement = await storage.getServiceAgreement(id);
+    if (!agreement) return res.status(404).json({ message: "Aftale ikke fundet" });
+    const { status } = req.body;
+    const updated = await storage.updateServiceAgreement(id, { status });
+    res.json(updated);
+  });
+
+  // === Job Status (updated with auto-invoice) ===
+  app.patch("/api/jobs/:id/status", async (req, res) => {
+    const id = Number(req.params.id);
+    const job = await storage.getJob(id);
+    if (!job) return res.status(404).json({ message: "Job ikke fundet" });
+
+    const { status, completionNotes } = req.body;
+    const updates: any = { status };
+
+    if (status === "in_progress") {
+      updates.startedAt = new Date().toISOString();
+    }
+    if (status === "completed") {
+      // Validate photo requirements
+      const photos = await storage.getJobPhotos(id);
+      const beforeCount = photos.filter(p => p.type === "before").length;
+      const afterCount = photos.filter(p => p.type === "after").length;
+      if (beforeCount < 2 || afterCount < 2) {
+        return res.status(400).json({ message: "Upload mindst 2 før-billeder og 2 efter-billeder" });
+      }
+      updates.completedAt = new Date().toISOString();
+      if (completionNotes) updates.completionNotes = completionNotes;
+    }
+
+    const updated = await storage.updateJob(id, updates);
+
+    // Auto-invoice on job completion
+    let createdInvoiceId: number | null = null;
+    if (status === "completed" && job.quoteId) {
+      const quote = await storage.getQuote(job.quoteId);
+      if (quote) {
+        const quoteLinesList = await storage.getQuoteLines(job.quoteId);
+        const invoiceNumber = storage.getNextInvoiceNumber();
+        const dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+        const invoice = await storage.createInvoice({
+          jobId: id,
+          customerId: job.customerId,
+          invoiceNumber,
+          status: "sent",
+          issueDate: new Date(),
+          dueDate,
+          totalAmount: quote.totalAmount,
+          paidAt: null,
+          paidAmount: null,
+          dineroGuid: null,
+          reminderCount: 0,
+          lastReminderAt: null,
+          notes: `Auto-oprettet fra job #${id}`,
+        });
+        createdInvoiceId = invoice.id;
+
+        if (quoteLinesList.length > 0) {
+          for (const ql of quoteLinesList) {
+            await storage.createInvoiceLine({
+              invoiceId: invoice.id,
+              description: ql.description,
+              quantity: ql.quantity,
+              unitLabel: ql.unitLabel,
+              unitPrice: ql.unitPrice,
+              lineTotal: ql.lineTotal,
+              sortOrder: ql.sortOrder,
+            });
+          }
+        } else {
+          await storage.createInvoiceLine({
+            invoiceId: invoice.id,
+            description: job.title,
+            quantity: 1,
+            unitLabel: "stk",
+            unitPrice: quote.totalAmount,
+            lineTotal: quote.totalAmount,
+            sortOrder: 0,
+          });
+        }
+
+        // Communication log
+        await storage.createCommunication({
+          customerId: job.customerId,
+          jobId: id,
+          quoteId: job.quoteId,
+          type: "system",
+          direction: "internal",
+          subject: `Faktura ${invoiceNumber} oprettet automatisk`,
+          body: `Faktura ${invoiceNumber} på ${quote.totalAmount} kr. oprettet automatisk ved afslutning af job.`,
+        });
+      }
+    }
+
+    res.json({ ...updated, createdInvoiceId });
+  });
+
+  // === Dashboard stats (enhanced) ===
   app.get("/api/dashboard/stats", async (_req, res) => {
     const jobs = await storage.getJobs();
     const quotes = await storage.getQuotes();
+    const invoices = await storage.getInvoices();
+    const agreements = await storage.getServiceAgreements();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -280,18 +462,61 @@ export async function registerRoutes(
     });
 
     const openQuotes = quotes.filter(q => q.status === "sent" || q.status === "draft");
-    const acceptedThisMonth = quotes.filter(q => {
-      if (q.status !== "accepted") return false;
-      const d = q.acceptedAt ? new Date(q.acceptedAt) : new Date(q.createdAt);
-      return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+
+    // Pending invoices = sent + overdue
+    const pendingInvoices = invoices.filter(i => i.status === "sent" || i.status === "overdue");
+    const overdueInvoices = invoices.filter(i => {
+      if (i.status === "overdue") return true;
+      if (i.status === "sent" && new Date(i.dueDate) < today) return true;
+      return false;
     });
-    const monthRevenue = acceptedThisMonth.reduce((sum, q) => sum + q.totalAmount, 0);
+
+    // Month revenue = sum of paid invoices this month
+    const thisMonth = today.getMonth();
+    const thisYear = today.getFullYear();
+    const paidThisMonth = invoices.filter(i => {
+      if (i.status !== "paid" || !i.paidAt) return false;
+      const d = new Date(i.paidAt);
+      return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+    });
+    const monthRevenue = paidThisMonth.reduce((sum, i) => sum + i.totalAmount, 0);
+
+    // Quote acceptance rate
+    const sentOrAccepted = quotes.filter(q => ["sent", "accepted", "rejected", "expired"].includes(q.status));
+    const acceptedQuotes = quotes.filter(q => q.status === "accepted");
+    const acceptRate = sentOrAccepted.length > 0 ? Math.round((acceptedQuotes.length / sentOrAccepted.length) * 100) : 0;
+
+    // Active agreements
+    const activeAgreements = agreements.filter(a => a.status === "active");
+
+    // Outstanding amount
+    const outstandingAmount = invoices
+      .filter(i => i.status === "sent" || i.status === "overdue")
+      .reduce((sum, i) => sum + i.totalAmount, 0);
+
+    // Revenue chart: last 6 months
+    const revenueChart = [];
+    const monthNames = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(thisYear, thisMonth - i, 1);
+      const m = d.getMonth();
+      const y = d.getFullYear();
+      const sum = invoices
+        .filter(inv => inv.status === "paid" && inv.paidAt && new Date(inv.paidAt).getMonth() === m && new Date(inv.paidAt).getFullYear() === y)
+        .reduce((s, inv) => s + inv.totalAmount, 0);
+      revenueChart.push({ month: monthNames[m], revenue: sum });
+    }
 
     res.json({
       todaysJobs: todaysJobs.length,
       openQuotes: openQuotes.length,
-      pendingInvoices: jobs.filter(j => j.status === "completed").length,
+      pendingInvoices: pendingInvoices.length,
+      overdueInvoices: overdueInvoices.length,
       monthRevenue,
+      acceptRate,
+      activeAgreements: activeAgreements.length,
+      outstandingAmount,
+      revenueChart,
       todaysJobsList: todaysJobs,
     });
   });

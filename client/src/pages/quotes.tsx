@@ -24,8 +24,9 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Search, Trash2, ArrowRight, ArrowLeftIcon, Send } from "lucide-react";
+import { Plus, Search, Trash2, ArrowRight, ArrowLeftIcon, Send, Download } from "lucide-react";
 import { formatDKK, formatDate, getStatusLabel, getStatusColor } from "@/lib/formatters";
+import { downloadCSV } from "@/lib/csv-export";
 import type { Quote, QuoteLine, Customer, PriceItem } from "@shared/schema";
 
 interface WizardLine {
@@ -64,9 +65,29 @@ export default function QuotesPage() {
           <h1 className="text-2xl font-bold">Tilbud</h1>
           <p className="text-muted-foreground">{quotes.length} tilbud i alt</p>
         </div>
-        <Button onClick={() => setWizardOpen(true)} data-testid="new-quote-btn">
-          <Plus className="h-4 w-4 mr-2" />Nyt tilbud
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => {
+            const exportData = filtered.map(q => ({
+              title: q.title,
+              customer: getCustomerName(q.customerId),
+              amount: formatDKK(q.totalAmount),
+              created: formatDate(q.createdAt),
+              status: getStatusLabel(q.status),
+            }));
+            downloadCSV(exportData, [
+              { key: "title", header: "Titel" },
+              { key: "customer", header: "Kunde" },
+              { key: "amount", header: "Beløb" },
+              { key: "created", header: "Oprettet" },
+              { key: "status", header: "Status" },
+            ], "tilbud.csv");
+          }} data-testid="export-csv-btn">
+            <Download className="h-4 w-4 mr-2" />CSV
+          </Button>
+          <Button onClick={() => setWizardOpen(true)} data-testid="new-quote-btn">
+            <Plus className="h-4 w-4 mr-2" />Nyt tilbud
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4">

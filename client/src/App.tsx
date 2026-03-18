@@ -12,6 +12,10 @@ import QuotesPage from "@/pages/quotes";
 import QuoteDetailPage from "@/pages/quote-detail";
 import JobsPage from "@/pages/jobs";
 import JobDetailPage from "@/pages/job-detail";
+import InvoicesPage from "@/pages/invoices";
+import InvoiceDetailPage from "@/pages/invoice-detail";
+import AgreementsPage from "@/pages/agreements";
+import AgreementDetailPage from "@/pages/agreement-detail";
 import PricesPage from "@/pages/prices";
 import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
@@ -27,6 +31,10 @@ function AppRouter() {
         <Route path="/quotes" component={QuotesPage} />
         <Route path="/jobs/:id" component={JobDetailPage} />
         <Route path="/jobs" component={JobsPage} />
+        <Route path="/invoices/:id" component={InvoiceDetailPage} />
+        <Route path="/invoices" component={InvoicesPage} />
+        <Route path="/agreements/:id" component={AgreementDetailPage} />
+        <Route path="/agreements" component={AgreementsPage} />
         <Route path="/prices" component={PricesPage} />
         <Route path="/settings" component={SettingsPage} />
         <Route component={NotFound} />
