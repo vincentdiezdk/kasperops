@@ -87,6 +87,16 @@ export const jobs = pgTable("jobs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Job photos
+export const jobPhotos = pgTable("job_photos", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull(),
+  type: text("type").notNull(), // "before" | "during" | "after"
+  fileName: text("file_name").notNull(),
+  url: text("url").notNull(),
+  uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+});
+
 // Communication log
 export const communications = pgTable("communications", {
   id: serial("id").primaryKey(),
@@ -107,6 +117,7 @@ export const insertPriceItemSchema = createInsertSchema(priceItems).omit({ id: t
 export const insertQuoteSchema = createInsertSchema(quotes).omit({ id: true, createdAt: true });
 export const insertQuoteLineSchema = createInsertSchema(quoteLines).omit({ id: true });
 export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true });
+export const insertJobPhotoSchema = createInsertSchema(jobPhotos).omit({ id: true, uploadedAt: true });
 export const insertCommunicationSchema = createInsertSchema(communications).omit({ id: true });
 
 // Types
@@ -122,5 +133,7 @@ export type QuoteLine = typeof quoteLines.$inferSelect;
 export type InsertQuoteLine = z.infer<typeof insertQuoteLineSchema>;
 export type Job = typeof jobs.$inferSelect;
 export type InsertJob = z.infer<typeof insertJobSchema>;
+export type JobPhoto = typeof jobPhotos.$inferSelect;
+export type InsertJobPhoto = z.infer<typeof insertJobPhotoSchema>;
 export type Communication = typeof communications.$inferSelect;
 export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Search, ArrowLeft, Trash2, ArrowRight, ArrowLeftIcon, Check, Send } from "lucide-react";
+import { Plus, Search, Trash2, ArrowRight, ArrowLeftIcon, Send } from "lucide-react";
 import { formatDKK, formatDate, getStatusLabel, getStatusColor } from "@/lib/formatters";
 import type { Quote, QuoteLine, Customer, PriceItem } from "@shared/schema";
 
@@ -42,7 +43,7 @@ export default function QuotesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
+  const [, navigate] = useHashLocation();
 
   const { data: quotes = [] } = useQuery<Quote[]>({ queryKey: ["/api/quotes"] });
   const { data: customers = [] } = useQuery<Customer[]>({ queryKey: ["/api/customers"] });
@@ -55,12 +56,6 @@ export default function QuotesPage() {
     if (s && !q.title.toLowerCase().includes(s) && !getCustomerName(q.customerId).toLowerCase().includes(s)) return false;
     return true;
   });
-
-  const selectedQuote = selectedQuoteId ? quotes.find(q => q.id === selectedQuoteId) : null;
-
-  if (selectedQuote) {
-    return <QuoteDetail quote={selectedQuote} customers={customers} onBack={() => setSelectedQuoteId(null)} />;
-  }
 
   return (
     <div className="space-y-6" data-testid="quotes-page">
@@ -110,7 +105,7 @@ export default function QuotesPage() {
             {filtered.length === 0 ? (
               <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Ingen tilbud fundet.</TableCell></TableRow>
             ) : filtered.map(q => (
-              <TableRow key={q.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedQuoteId(q.id)} data-testid={`quote-row-${q.id}`}>
+              <TableRow key={q.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/quotes/${q.id}`)} data-testid={`quote-row-${q.id}`}>
                 <TableCell className="font-medium">{q.title}</TableCell>
                 <TableCell className="hidden md:table-cell">{getCustomerName(q.customerId)}</TableCell>
                 <TableCell className="hidden md:table-cell">{formatDKK(q.totalAmount)}</TableCell>
@@ -128,125 +123,9 @@ export default function QuotesPage() {
         <QuoteWizard
           customers={customers}
           onClose={() => setWizardOpen(false)}
-          onCreated={(quoteId) => { setWizardOpen(false); setSelectedQuoteId(quoteId); }}
+          onCreated={(quoteId) => { setWizardOpen(false); navigate(`/quotes/${quoteId}`); }}
         />
       )}
-    </div>
-  );
-}
-
-function QuoteDetail({ quote, customers, onBack }: { quote: Quote; customers: Customer[]; onBack: () => void }) {
-  const { data: lines = [] } = useQuery<QuoteLine[]>({ queryKey: [`/api/quotes/${quote.id}/lines`] });
-  const customer = customers.find(c => c.id === quote.customerId);
-
-  const updateMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("PATCH", `/api/quotes/${quote.id}`, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/quotes"] }); queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] }); },
-  });
-
-  return (
-    <div className="space-y-6" data-testid="quote-detail-page">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={onBack} data-testid="back-btn">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold">{quote.title}</h1>
-          <p className="text-muted-foreground">Tilbud #{quote.id} — {customer?.name}</p>
-        </div>
-        <Badge className={getStatusColor(quote.status)} variant="secondary">{getStatusLabel(quote.status)}</Badge>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-6">
-          <Card data-testid="quote-lines-card">
-            <CardHeader><CardTitle>Linjer</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Beskrivelse</TableHead>
-                    <TableHead className="text-right">Antal</TableHead>
-                    <TableHead>Enhed</TableHead>
-                    <TableHead className="text-right">Enhedspris</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {lines.map(l => (
-                    <TableRow key={l.id}>
-                      <TableCell>{l.description}</TableCell>
-                      <TableCell className="text-right">{l.quantity}</TableCell>
-                      <TableCell>{l.unitLabel}</TableCell>
-                      <TableCell className="text-right">{formatDKK(l.unitPrice)}</TableCell>
-                      <TableCell className="text-right font-medium">{formatDKK(l.lineTotal)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              <div className="flex justify-end mt-4 pt-4 border-t">
-                <div className="text-right">
-                  <p className="text-sm text-muted-foreground">Total</p>
-                  <p className="text-2xl font-bold">{formatDKK(quote.totalAmount)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-6">
-          <Card data-testid="quote-info-card">
-            <CardHeader><CardTitle>Info</CardTitle></CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div><span className="text-muted-foreground">Kunde:</span> {customer?.name}</div>
-              <div><span className="text-muted-foreground">Oprettet:</span> {formatDate(quote.createdAt)}</div>
-              {quote.validUntil && <div><span className="text-muted-foreground">Gyldig til:</span> {formatDate(quote.validUntil)}</div>}
-              {quote.sentAt && <div><span className="text-muted-foreground">Sendt:</span> {formatDate(quote.sentAt)}</div>}
-              {quote.acceptedAt && <div><span className="text-muted-foreground">Accepteret:</span> {formatDate(quote.acceptedAt)}</div>}
-              {quote.notes && <div className="p-3 bg-muted rounded-lg mt-2">{quote.notes}</div>}
-            </CardContent>
-          </Card>
-
-          <Card data-testid="quote-actions-card">
-            <CardHeader><CardTitle>Handlinger</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {quote.status === "draft" && (
-                <Button
-                  className="w-full"
-                  onClick={() => updateMutation.mutate({ status: "sent", sentAt: new Date().toISOString() })}
-                  data-testid="mark-sent-btn"
-                >
-                  <Send className="h-4 w-4 mr-2" />Markér som sendt
-                </Button>
-              )}
-              {quote.status === "sent" && (
-                <>
-                  <Button
-                    className="w-full"
-                    onClick={() => updateMutation.mutate({ status: "accepted", acceptedAt: new Date().toISOString() })}
-                    data-testid="mark-accepted-btn"
-                  >
-                    <Check className="h-4 w-4 mr-2" />Markér som accepteret
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    className="w-full"
-                    onClick={() => updateMutation.mutate({ status: "rejected" })}
-                    data-testid="mark-rejected-btn"
-                  >
-                    Markér som afvist
-                  </Button>
-                </>
-              )}
-              {(quote.status === "accepted" || quote.status === "rejected" || quote.status === "expired") && (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Tilbuddet er {getStatusLabel(quote.status).toLowerCase()}.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import {
   type Quote, type InsertQuote,
   type QuoteLine, type InsertQuoteLine,
   type Job, type InsertJob,
+  type JobPhoto, type InsertJobPhoto,
   type Communication, type InsertCommunication,
 } from "@shared/schema";
 
@@ -50,6 +51,11 @@ export interface IStorage {
   updateJob(id: number, job: Partial<InsertJob>): Promise<Job | undefined>;
   deleteJob(id: number): Promise<boolean>;
 
+  // Job Photos
+  getJobPhotos(jobId: number): Promise<JobPhoto[]>;
+  createJobPhoto(photo: InsertJobPhoto): Promise<JobPhoto>;
+  deleteJobPhoto(id: number): Promise<boolean>;
+
   // Communications
   getCommunications(customerId?: number): Promise<Communication[]>;
   createCommunication(comm: InsertCommunication): Promise<Communication>;
@@ -62,9 +68,10 @@ export class MemStorage implements IStorage {
   private quotes: Map<number, Quote> = new Map();
   private quoteLines: Map<number, QuoteLine> = new Map();
   private jobs: Map<number, Job> = new Map();
+  private jobPhotosMap: Map<number, JobPhoto> = new Map();
   private communications: Map<number, Communication> = new Map();
 
-  private nextId = { users: 1, customers: 1, priceItems: 1, quotes: 1, quoteLines: 1, jobs: 1, communications: 1 };
+  private nextId = { users: 1, customers: 1, priceItems: 1, quotes: 1, quoteLines: 1, jobs: 1, jobPhotos: 1, communications: 1 };
 
   constructor() {
     this.seed();
@@ -103,6 +110,22 @@ export class MemStorage implements IStorage {
     this.createJob({ quoteId: 3, customerId: 3, assignedUserId: 1, title: "Haveservice — Søndergade 22", description: "Komplet haveservice inkl. hæk og græs", status: "planned", scheduledDate: new Date("2026-03-20"), startedAt: null, completedAt: null, addressLine1: "Søndergade 22", postalCode: "8000", city: "Aarhus C", completionNotes: null });
     this.createJob({ quoteId: 1, customerId: 1, assignedUserId: 1, title: "Algebehandling — Nørregade 12", description: "Algebehandling af tag", status: "in_progress", scheduledDate: new Date("2026-03-18"), startedAt: new Date("2026-03-18T08:00:00"), completedAt: null, addressLine1: "Nørregade 12", postalCode: "2100", city: "København Ø", completionNotes: null });
     this.createJob({ quoteId: null, customerId: 2, assignedUserId: 1, title: "Vinduespudsning — Vestergade 8", description: "Pudsning af alle vinduer", status: "completed", scheduledDate: new Date("2026-03-15"), startedAt: new Date("2026-03-15T09:00:00"), completedAt: new Date("2026-03-15T13:00:00"), addressLine1: "Vestergade 8", postalCode: "5000", city: "Odense C", completionNotes: "Alle vinduer pudset, kunden tilfreds" });
+
+    // Seed job photos for job 2 (in_progress) and job 3 (completed)
+    this.createJobPhoto({ jobId: 2, type: "before", fileName: "foer1.jpg", url: "https://placehold.co/400x300/2d6a2d/white?text=F%C3%B8r+1" });
+    this.createJobPhoto({ jobId: 2, type: "before", fileName: "foer2.jpg", url: "https://placehold.co/400x300/2d6a2d/white?text=F%C3%B8r+2" });
+    this.createJobPhoto({ jobId: 2, type: "during", fileName: "under1.jpg", url: "https://placehold.co/400x300/1a5c1a/white?text=Under+1" });
+    this.createJobPhoto({ jobId: 3, type: "before", fileName: "foer1.jpg", url: "https://placehold.co/400x300/2d6a2d/white?text=F%C3%B8r+1" });
+    this.createJobPhoto({ jobId: 3, type: "before", fileName: "foer2.jpg", url: "https://placehold.co/400x300/2d6a2d/white?text=F%C3%B8r+2" });
+    this.createJobPhoto({ jobId: 3, type: "after", fileName: "efter1.jpg", url: "https://placehold.co/400x300/4a9e4a/white?text=Efter+1" });
+    this.createJobPhoto({ jobId: 3, type: "after", fileName: "efter2.jpg", url: "https://placehold.co/400x300/4a9e4a/white?text=Efter+2" });
+
+    // Seed communications
+    this.createCommunication({ customerId: 1, jobId: null, quoteId: 1, type: "email", direction: "outbound", subject: "Tilbud: Algebehandling af tag", body: "Kære Anders, hermed fremsendes tilbud på algebehandling af taget." });
+    this.createCommunication({ customerId: 1, jobId: null, quoteId: 1, type: "phone", direction: "inbound", subject: "Opfølgning på tilbud", body: "Anders ringede for at spørge om tidspunkt for opstart." });
+    this.createCommunication({ customerId: 2, jobId: null, quoteId: null, type: "email", direction: "outbound", subject: "Bekræftelse af vinduespudsning", body: "Kære Birthe, hermed bekræftes vinduespudsning d. 15. marts." });
+    this.createCommunication({ customerId: 3, jobId: null, quoteId: 3, type: "email", direction: "outbound", subject: "Tilbud: Komplet haveservice", body: "Kære Carl, hermed fremsendes tilbud på komplet haveservice." });
+    this.createCommunication({ customerId: 3, jobId: null, quoteId: 3, type: "phone", direction: "inbound", subject: "Tilbud accepteret", body: "Carl accepterede tilbuddet per telefon." });
   }
 
   // Users
@@ -247,6 +270,20 @@ export class MemStorage implements IStorage {
   }
   async deleteJob(id: number): Promise<boolean> {
     return this.jobs.delete(id);
+  }
+
+  // Job Photos
+  async getJobPhotos(jobId: number): Promise<JobPhoto[]> {
+    return Array.from(this.jobPhotosMap.values()).filter(p => p.jobId === jobId);
+  }
+  async createJobPhoto(data: InsertJobPhoto): Promise<JobPhoto> {
+    const id = this.nextId.jobPhotos++;
+    const photo: JobPhoto = { id, jobId: data.jobId, type: data.type, fileName: data.fileName, url: data.url, uploadedAt: new Date() };
+    this.jobPhotosMap.set(id, photo);
+    return photo;
+  }
+  async deleteJobPhoto(id: number): Promise<boolean> {
+    return this.jobPhotosMap.delete(id);
   }
 
   // Communications

@@ -150,6 +150,109 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
+  // === Job Photos ===
+  app.get("/api/jobs/:id/photos", async (req, res) => {
+    const photos = await storage.getJobPhotos(Number(req.params.id));
+    res.json(photos);
+  });
+  app.post("/api/jobs/:id/photos", async (req, res) => {
+    const jobId = Number(req.params.id);
+    const job = await storage.getJob(jobId);
+    if (!job) return res.status(404).json({ message: "Job ikke fundet" });
+    const photo = await storage.createJobPhoto({ ...req.body, jobId });
+    res.status(201).json(photo);
+  });
+  app.delete("/api/jobs/:id/photos/:photoId", async (req, res) => {
+    const deleted = await storage.deleteJobPhoto(Number(req.params.photoId));
+    if (!deleted) return res.status(404).json({ message: "Foto ikke fundet" });
+    res.json({ success: true });
+  });
+
+  // === Job Status ===
+  app.patch("/api/jobs/:id/status", async (req, res) => {
+    const id = Number(req.params.id);
+    const job = await storage.getJob(id);
+    if (!job) return res.status(404).json({ message: "Job ikke fundet" });
+
+    const { status, completionNotes } = req.body;
+    const updates: any = { status };
+
+    if (status === "in_progress") {
+      updates.startedAt = new Date().toISOString();
+    }
+    if (status === "completed") {
+      // Validate photo requirements
+      const photos = await storage.getJobPhotos(id);
+      const beforeCount = photos.filter(p => p.type === "before").length;
+      const afterCount = photos.filter(p => p.type === "after").length;
+      if (beforeCount < 2 || afterCount < 2) {
+        return res.status(400).json({ message: "Upload mindst 2 før-billeder og 2 efter-billeder" });
+      }
+      updates.completedAt = new Date().toISOString();
+      if (completionNotes) updates.completionNotes = completionNotes;
+    }
+
+    const updated = await storage.updateJob(id, updates);
+    res.json(updated);
+  });
+
+  // === Quote Status ===
+  app.patch("/api/quotes/:id/status", async (req, res) => {
+    const id = Number(req.params.id);
+    const quote = await storage.getQuote(id);
+    if (!quote) return res.status(404).json({ message: "Tilbud ikke fundet" });
+
+    const { status } = req.body;
+    const updates: any = { status };
+    if (status === "sent") updates.sentAt = new Date().toISOString();
+    if (status === "accepted") updates.acceptedAt = new Date().toISOString();
+
+    const updated = await storage.updateQuote(id, updates);
+    res.json(updated);
+  });
+
+  // === Create Job from Quote ===
+  app.post("/api/quotes/:id/create-job", async (req, res) => {
+    const id = Number(req.params.id);
+    const quote = await storage.getQuote(id);
+    if (!quote) return res.status(404).json({ message: "Tilbud ikke fundet" });
+    if (quote.status !== "accepted") return res.status(400).json({ message: "Tilbuddet skal være accepteret" });
+
+    const customer = await storage.getCustomer(quote.customerId);
+    const job = await storage.createJob({
+      quoteId: quote.id,
+      customerId: quote.customerId,
+      title: quote.title,
+      description: quote.notes || null,
+      status: "planned",
+      addressLine1: customer?.addressLine1 || null,
+      postalCode: customer?.postalCode || null,
+      city: customer?.city || null,
+      assignedUserId: null,
+      scheduledDate: null,
+      startedAt: null,
+      completedAt: null,
+      completionNotes: null,
+    });
+    res.status(201).json(job);
+  });
+
+  // === Customer sub-routes ===
+  app.get("/api/customers/:id/quotes", async (req, res) => {
+    const customerId = Number(req.params.id);
+    const allQuotes = await storage.getQuotes();
+    res.json(allQuotes.filter(q => q.customerId === customerId));
+  });
+  app.get("/api/customers/:id/jobs", async (req, res) => {
+    const customerId = Number(req.params.id);
+    const allJobs = await storage.getJobs();
+    res.json(allJobs.filter(j => j.customerId === customerId));
+  });
+  app.get("/api/customers/:id/communications", async (req, res) => {
+    const comms = await storage.getCommunications(Number(req.params.id));
+    res.json(comms);
+  });
+
   // === Communications ===
   app.get("/api/communications", async (req, res) => {
     const customerId = req.query.customerId ? Number(req.query.customerId) : undefined;

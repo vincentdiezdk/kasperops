@@ -7,8 +7,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import AppLayout from "@/components/app-layout";
 import Dashboard from "@/pages/dashboard";
 import CustomersPage from "@/pages/customers";
+import CustomerDetailPage from "@/pages/customer-detail";
 import QuotesPage from "@/pages/quotes";
+import QuoteDetailPage from "@/pages/quote-detail";
 import JobsPage from "@/pages/jobs";
+import JobDetailPage from "@/pages/job-detail";
 import PricesPage from "@/pages/prices";
 import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
@@ -18,8 +21,11 @@ function AppRouter() {
     <AppLayout>
       <Switch>
         <Route path="/" component={Dashboard} />
+        <Route path="/customers/:id" component={CustomerDetailPage} />
         <Route path="/customers" component={CustomersPage} />
+        <Route path="/quotes/:id" component={QuoteDetailPage} />
         <Route path="/quotes" component={QuotesPage} />
+        <Route path="/jobs/:id" component={JobDetailPage} />
         <Route path="/jobs" component={JobsPage} />
         <Route path="/prices" component={PricesPage} />
         <Route path="/settings" component={SettingsPage} />
