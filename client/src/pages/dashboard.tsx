@@ -1,10 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Briefcase, FileText, Receipt, TrendingUp, AlertTriangle, BarChart3, FileCheck, Wallet } from "lucide-react";
+import { Briefcase, FileText, Receipt, TrendingUp, AlertTriangle, BarChart3, FileCheck, Wallet, MapPin, ArrowRight } from "lucide-react";
 import { formatDKK, formatDate, getGreeting, getStatusLabel, getStatusColor } from "@/lib/formatters";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Link } from "wouter";
 import type { Job, Quote, Invoice } from "@shared/schema";
+
+interface RouteJob extends Job {
+  latitude: number | null;
+  longitude: number | null;
+  customerName: string;
+}
 
 interface DashboardStats {
   todaysJobs: number;
@@ -17,6 +24,11 @@ interface DashboardStats {
   outstandingAmount: number;
   revenueChart: { month: string; revenue: number }[];
   todaysJobsList: Job[];
+  routeWidget: {
+    jobs: RouteJob[];
+    totalKm: number;
+    totalMinutes: number;
+  };
 }
 
 export default function Dashboard() {
@@ -120,6 +132,48 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Route Widget */}
+      <Card data-testid="route-widget">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            Dagens køreplan
+          </CardTitle>
+          <Link href="/route">
+            <span className="text-sm text-primary hover:underline flex items-center gap-1 cursor-pointer" data-testid="route-widget-link">
+              Se fuld køreplan <ArrowRight className="h-3 w-3" />
+            </span>
+          </Link>
+        </CardHeader>
+        <CardContent>
+          {(!stats?.routeWidget || stats.routeWidget.jobs.length === 0) ? (
+            <p className="text-muted-foreground text-sm">Ingen jobs planlagt i dag</p>
+          ) : (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                {stats.routeWidget.jobs.map((job, idx) => (
+                  <div key={job.id} className="flex items-center gap-3">
+                    <div className="w-6 h-6 rounded-full bg-primary/80 text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">
+                      {idx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{job.title}</p>
+                      <p className="text-xs text-muted-foreground">{job.customerName}</p>
+                    </div>
+                    <Badge className={getStatusColor(job.status)} variant="secondary">
+                      {getStatusLabel(job.status)}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+              <div className="text-sm text-muted-foreground border-t pt-2">
+                {stats.routeWidget.jobs.length} stops · ~{stats.routeWidget.totalKm} km · ~{Math.floor(stats.routeWidget.totalMinutes / 60)}t {stats.routeWidget.totalMinutes % 60}min
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Revenue Chart */}
       <Card data-testid="revenue-chart">

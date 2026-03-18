@@ -25,6 +25,8 @@ export const customers = pgTable("customers", {
   cvr: text("cvr"),
   notes: text("notes"),
   tags: text("tags").array(),
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
   gdprConsentAt: timestamp("gdpr_consent_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -167,6 +169,23 @@ export const communications = pgTable("communications", {
   sentAt: timestamp("sent_at").defaultNow().notNull(),
 });
 
+// Leads
+export const leads = pgTable("leads", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  address: text("address"),
+  source: text("source").notNull().default("website"),
+  stage: text("stage").notNull().default("new"),
+  notes: text("notes"),
+  estimatedValue: doublePrecision("estimated_value"),
+  assignedUserId: integer("assigned_user_id"),
+  customerId: integer("customer_id"),
+  quoteId: integer("quote_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true });
@@ -180,6 +199,7 @@ export const insertInvoiceSchema = createInsertSchema(invoices).omit({ id: true,
 export const insertInvoiceLineSchema = createInsertSchema(invoiceLines).omit({ id: true });
 export const insertPaymentReminderSchema = createInsertSchema(paymentReminders).omit({ id: true });
 export const insertServiceAgreementSchema = createInsertSchema(serviceAgreements).omit({ id: true, createdAt: true });
+export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true });
 
 // Types
 export type User = typeof users.$inferSelect;
@@ -206,3 +226,5 @@ export type PaymentReminder = typeof paymentReminders.$inferSelect;
 export type InsertPaymentReminder = z.infer<typeof insertPaymentReminderSchema>;
 export type ServiceAgreement = typeof serviceAgreements.$inferSelect;
 export type InsertServiceAgreement = z.infer<typeof insertServiceAgreementSchema>;
+export type Lead = typeof leads.$inferSelect;
+export type InsertLead = z.infer<typeof insertLeadSchema>;

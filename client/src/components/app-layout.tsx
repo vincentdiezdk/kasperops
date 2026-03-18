@@ -14,6 +14,9 @@ import {
   X,
   Receipt,
   FileCheck,
+  MapPin,
+  Filter,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/hooks/use-theme";
@@ -21,12 +24,15 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/route", label: "Køreplan", icon: MapPin },
   { href: "/customers", label: "Kunder", icon: Users },
+  { href: "/leads", label: "Leads", icon: Filter },
   { href: "/quotes", label: "Tilbud", icon: FileText },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
   { href: "/invoices", label: "Fakturaer", icon: Receipt },
   { href: "/prices", label: "Priskatalog", icon: Tag },
   { href: "/agreements", label: "Aftaler", icon: FileCheck },
+  { href: "/reports", label: "Rapporter", icon: BarChart3 },
   { href: "/settings", label: "Indstillinger", icon: Settings },
 ];
 

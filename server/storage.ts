@@ -11,6 +11,7 @@ import {
   type InvoiceLine, type InsertInvoiceLine,
   type PaymentReminder, type InsertPaymentReminder,
   type ServiceAgreement, type InsertServiceAgreement,
+  type Lead, type InsertLead,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -83,6 +84,13 @@ export interface IStorage {
   getServiceAgreement(id: number): Promise<ServiceAgreement | undefined>;
   createServiceAgreement(agreement: InsertServiceAgreement): Promise<ServiceAgreement>;
   updateServiceAgreement(id: number, agreement: Partial<InsertServiceAgreement>): Promise<ServiceAgreement | undefined>;
+
+  // Leads
+  getLeads(): Promise<Lead[]>;
+  getLead(id: number): Promise<Lead | undefined>;
+  createLead(lead: InsertLead): Promise<Lead>;
+  updateLead(id: number, lead: Partial<InsertLead>): Promise<Lead | undefined>;
+  deleteLead(id: number): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -98,8 +106,9 @@ export class MemStorage implements IStorage {
   private invoiceLinesMap: Map<number, InvoiceLine> = new Map();
   private paymentRemindersMap: Map<number, PaymentReminder> = new Map();
   private serviceAgreementsMap: Map<number, ServiceAgreement> = new Map();
+  private leadsMap: Map<number, Lead> = new Map();
 
-  private nextId = { users: 1, customers: 1, priceItems: 1, quotes: 1, quoteLines: 1, jobs: 1, jobPhotos: 1, communications: 1, invoices: 1, invoiceLines: 1, paymentReminders: 1, serviceAgreements: 1 };
+  private nextId = { users: 1, customers: 1, priceItems: 1, quotes: 1, quoteLines: 1, jobs: 1, jobPhotos: 1, communications: 1, invoices: 1, invoiceLines: 1, paymentReminders: 1, serviceAgreements: 1, leads: 1 };
   private invoiceCounter = 0;
 
   constructor() {
@@ -110,10 +119,13 @@ export class MemStorage implements IStorage {
     // Seed admin user
     this.createUser({ email: "kasper@kaspermh.dk", name: "Kasper MH", role: "admin", phone: "+45 12345678", avatarUrl: null, isActive: true });
 
-    // Seed some customers
-    this.createCustomer({ name: "Anders Jensen", email: "anders@example.dk", phone: "+45 22334455", addressLine1: "Nørregade 12", postalCode: "2100", city: "København Ø", cvr: null, notes: "Fast kunde", tags: ["privat"], gdprConsentAt: null });
-    this.createCustomer({ name: "Birthe Sørensen", email: "birthe@firma.dk", phone: "+45 33445566", addressLine1: "Vestergade 8", postalCode: "5000", city: "Odense C", cvr: "12345678", notes: null, tags: ["erhverv"], gdprConsentAt: null });
-    this.createCustomer({ name: "Carl Petersen", email: "carl@bolig.dk", phone: "+45 44556677", addressLine1: "Søndergade 22", postalCode: "8000", city: "Aarhus C", cvr: null, notes: "Stor have", tags: ["privat"], gdprConsentAt: null });
+    // Seed customers with coordinates
+    this.createCustomer({ name: "Anders Jensen", email: "anders@example.dk", phone: "+45 22334455", addressLine1: "Nørregade 12", postalCode: "2100", city: "København Ø", cvr: null, notes: "Fast kunde", tags: ["privat"], latitude: 55.6867, longitude: 12.5726, gdprConsentAt: null });
+    this.createCustomer({ name: "Birthe Sørensen", email: "birthe@firma.dk", phone: "+45 33445566", addressLine1: "Vestergade 8", postalCode: "5000", city: "Odense C", cvr: "12345678", notes: null, tags: ["erhverv"], latitude: 55.3981, longitude: 10.3832, gdprConsentAt: null });
+    this.createCustomer({ name: "Carl Petersen", email: "carl@bolig.dk", phone: "+45 44556677", addressLine1: "Søndergade 22", postalCode: "8000", city: "Aarhus C", cvr: null, notes: "Stor have", tags: ["privat"], latitude: 56.1534, longitude: 10.2104, gdprConsentAt: null });
+    this.createCustomer({ name: "Dorthe Nielsen", email: "dorthe@mail.dk", phone: "+45 55667788", addressLine1: "Algade 15", postalCode: "4000", city: "Roskilde", cvr: null, notes: "Ny kunde 2026", tags: ["privat"], latitude: 55.6415, longitude: 12.0803, gdprConsentAt: null });
+    this.createCustomer({ name: "Erik Thomsen", email: "erik@erhverv.dk", phone: "+45 66778899", addressLine1: "Havnegade 3", postalCode: "9000", city: "Aalborg", cvr: "87654321", notes: null, tags: ["erhverv"], latitude: 57.0488, longitude: 9.9217, gdprConsentAt: null });
+    this.createCustomer({ name: "Freja Hansen", email: "freja@bolig.dk", phone: "+45 77889900", addressLine1: "Strandvejen 45", postalCode: "8700", city: "Horsens", cvr: null, notes: "Stor ejendom", tags: ["privat"], latitude: 55.8607, longitude: 9.8503, gdprConsentAt: null });
 
     // Seed price items
     this.createPriceItem({ category: "Algebehandling", name: "Algebehandling af tag", description: "Professionel algebehandling af hele taget", unitLabel: "m²", unitPrice: 45, isActive: true });
@@ -124,21 +136,35 @@ export class MemStorage implements IStorage {
     this.createPriceItem({ category: "Haveservice", name: "Hækklipning", description: "Klipning af hæk op til 2m", unitLabel: "meter", unitPrice: 35, isActive: true });
     this.createPriceItem({ category: "Haveservice", name: "Græsslåning", description: "Slåning af græsplæne", unitLabel: "m²", unitPrice: 8, isActive: true });
 
-    // Seed some quotes
+    // Seed quotes (more for reports)
     this.createQuote({ customerId: 1, title: "Algebehandling af tag — Nørregade 12", status: "sent", validUntil: new Date("2026-04-15"), notes: "Tilbud sendt per email", totalAmount: 4500, acceptToken: null, acceptedAt: null, sentAt: new Date("2026-03-10") });
     this.createQuote({ customerId: 2, title: "Rens af fliser — Vestergade 8", status: "draft", validUntil: new Date("2026-04-20"), notes: null, totalAmount: 2750, acceptToken: null, acceptedAt: null, sentAt: null });
     this.createQuote({ customerId: 3, title: "Komplet haveservice — Søndergade 22", status: "accepted", validUntil: new Date("2026-05-01"), notes: "Accepteret per telefon", totalAmount: 6200, acceptToken: null, acceptedAt: new Date("2026-03-15"), sentAt: new Date("2026-03-12") });
+    this.createQuote({ customerId: 4, title: "Vinduespudsning — Algade 15", status: "accepted", validUntil: new Date("2026-04-10"), notes: null, totalAmount: 3000, acceptToken: null, acceptedAt: new Date("2026-02-10"), sentAt: new Date("2026-02-05") });
+    this.createQuote({ customerId: 5, title: "Algebehandling af facade — Havnegade 3", status: "rejected", validUntil: new Date("2026-03-01"), notes: "For dyrt", totalAmount: 7200, acceptToken: null, acceptedAt: null, sentAt: new Date("2026-01-20") });
+    this.createQuote({ customerId: 6, title: "Hækklipning — Strandvejen 45", status: "accepted", validUntil: new Date("2026-05-15"), notes: null, totalAmount: 2100, acceptToken: null, acceptedAt: new Date("2026-01-15"), sentAt: new Date("2026-01-10") });
 
     // Seed quote lines
     this.createQuoteLine({ quoteId: 1, priceItemId: 1, description: "Algebehandling af tag", quantity: 100, unitLabel: "m²", unitPrice: 45, lineTotal: 4500, sortOrder: 0 });
     this.createQuoteLine({ quoteId: 2, priceItemId: 3, description: "Højtryksvask af fliser", quantity: 50, unitLabel: "m²", unitPrice: 55, lineTotal: 2750, sortOrder: 0 });
     this.createQuoteLine({ quoteId: 3, priceItemId: 6, description: "Hækklipning", quantity: 40, unitLabel: "meter", unitPrice: 35, lineTotal: 1400, sortOrder: 0 });
     this.createQuoteLine({ quoteId: 3, priceItemId: 7, description: "Græsslåning", quantity: 600, unitLabel: "m²", unitPrice: 8, lineTotal: 4800, sortOrder: 1 });
+    this.createQuoteLine({ quoteId: 4, priceItemId: 5, description: "Vinduespudsning ude/inde", quantity: 40, unitLabel: "stk", unitPrice: 75, lineTotal: 3000, sortOrder: 0 });
+    this.createQuoteLine({ quoteId: 5, priceItemId: 2, description: "Algebehandling af facade", quantity: 180, unitLabel: "m²", unitPrice: 40, lineTotal: 7200, sortOrder: 0 });
+    this.createQuoteLine({ quoteId: 6, priceItemId: 6, description: "Hækklipning", quantity: 60, unitLabel: "meter", unitPrice: 35, lineTotal: 2100, sortOrder: 0 });
 
-    // Seed some jobs
+    // Seed jobs (more for route planning and reports)
     this.createJob({ quoteId: 3, customerId: 3, assignedUserId: 1, title: "Haveservice — Søndergade 22", description: "Komplet haveservice inkl. hæk og græs", status: "planned", scheduledDate: new Date("2026-03-20"), startedAt: null, completedAt: null, addressLine1: "Søndergade 22", postalCode: "8000", city: "Aarhus C", completionNotes: null });
     this.createJob({ quoteId: 1, customerId: 1, assignedUserId: 1, title: "Algebehandling — Nørregade 12", description: "Algebehandling af tag", status: "in_progress", scheduledDate: new Date("2026-03-18"), startedAt: new Date("2026-03-18T08:00:00"), completedAt: null, addressLine1: "Nørregade 12", postalCode: "2100", city: "København Ø", completionNotes: null });
     this.createJob({ quoteId: null, customerId: 2, assignedUserId: 1, title: "Vinduespudsning — Vestergade 8", description: "Pudsning af alle vinduer", status: "completed", scheduledDate: new Date("2026-03-15"), startedAt: new Date("2026-03-15T09:00:00"), completedAt: new Date("2026-03-15T13:00:00"), addressLine1: "Vestergade 8", postalCode: "5000", city: "Odense C", completionNotes: "Alle vinduer pudset, kunden tilfreds" });
+    this.createJob({ quoteId: 4, customerId: 4, assignedUserId: 1, title: "Vinduespudsning — Algade 15", description: "Vinduespudsning ude/inde", status: "completed", scheduledDate: new Date("2026-02-15"), startedAt: new Date("2026-02-15T08:30:00"), completedAt: new Date("2026-02-15T12:00:00"), addressLine1: "Algade 15", postalCode: "4000", city: "Roskilde", completionNotes: "Fint resultat" });
+    this.createJob({ quoteId: 6, customerId: 6, assignedUserId: 1, title: "Hækklipning — Strandvejen 45", description: "Klipning af hæk", status: "completed", scheduledDate: new Date("2026-01-25"), startedAt: new Date("2026-01-25T09:00:00"), completedAt: new Date("2026-01-25T14:00:00"), addressLine1: "Strandvejen 45", postalCode: "8700", city: "Horsens", completionNotes: "60m hæk klippet" });
+    // More today's jobs for route planning
+    this.createJob({ quoteId: null, customerId: 3, assignedUserId: 1, title: "Græsslåning — Søndergade 22", description: "Slåning af stor græsplæne", status: "planned", scheduledDate: new Date("2026-03-18"), startedAt: null, completedAt: null, addressLine1: "Søndergade 22", postalCode: "8000", city: "Aarhus C", completionNotes: null });
+    this.createJob({ quoteId: null, customerId: 6, assignedUserId: 1, title: "Højtryksvask — Strandvejen 45", description: "Rens af terrasse", status: "planned", scheduledDate: new Date("2026-03-18"), startedAt: null, completedAt: null, addressLine1: "Strandvejen 45", postalCode: "8700", city: "Horsens", completionNotes: null });
+    // Historical completed jobs for reporting
+    this.createJob({ quoteId: null, customerId: 1, assignedUserId: 1, title: "Algebehandling af facade — Nørregade 12", description: "Facade", status: "completed", scheduledDate: new Date("2026-01-10"), startedAt: new Date("2026-01-10T08:00:00"), completedAt: new Date("2026-01-10T15:00:00"), addressLine1: "Nørregade 12", postalCode: "2100", city: "København Ø", completionNotes: "Facade behandlet" });
+    this.createJob({ quoteId: null, customerId: 5, assignedUserId: 1, title: "Rens af indkørsel — Havnegade 3", description: "Indkørsel renset", status: "completed", scheduledDate: new Date("2026-02-20"), startedAt: new Date("2026-02-20T09:00:00"), completedAt: new Date("2026-02-20T12:00:00"), addressLine1: "Havnegade 3", postalCode: "9000", city: "Aalborg", completionNotes: "Renset" });
 
     // Seed job photos for job 2 (in_progress) and job 3 (completed)
     this.createJobPhoto({ jobId: 2, type: "before", fileName: "foer1.jpg", url: "https://placehold.co/400x300/2d6a2d/white?text=F%C3%B8r+1" });
@@ -156,12 +182,18 @@ export class MemStorage implements IStorage {
     this.createCommunication({ customerId: 3, jobId: null, quoteId: 3, type: "email", direction: "outbound", subject: "Tilbud: Komplet haveservice", body: "Kære Carl, hermed fremsendes tilbud på komplet haveservice." });
     this.createCommunication({ customerId: 3, jobId: null, quoteId: 3, type: "phone", direction: "inbound", subject: "Tilbud accepteret", body: "Carl accepterede tilbuddet per telefon." });
 
-    // Seed invoices
+    // Seed invoices (more for reporting)
     this.createInvoice({ jobId: 3, customerId: 2, invoiceNumber: "KMH-2026-0001", status: "paid", issueDate: new Date("2026-01-15"), dueDate: new Date("2026-01-29"), totalAmount: 3750, paidAt: new Date("2026-01-25"), paidAmount: 3750, dineroGuid: null, reminderCount: 0, lastReminderAt: null, notes: "Vinduespudsning — betalt til tiden" });
     this.createInvoice({ jobId: null, customerId: 1, invoiceNumber: "KMH-2026-0002", status: "paid", issueDate: new Date("2026-02-01"), dueDate: new Date("2026-02-15"), totalAmount: 8500, paidAt: new Date("2026-02-14"), paidAmount: 8500, dineroGuid: null, reminderCount: 0, lastReminderAt: null, notes: null });
     this.createInvoice({ jobId: null, customerId: 3, invoiceNumber: "KMH-2026-0003", status: "sent", issueDate: new Date("2026-03-01"), dueDate: new Date("2026-03-15"), totalAmount: 6200, paidAt: null, paidAmount: null, dineroGuid: null, reminderCount: 0, lastReminderAt: null, notes: null });
     this.createInvoice({ jobId: null, customerId: 1, invoiceNumber: "KMH-2026-0004", status: "overdue", issueDate: new Date("2026-02-15"), dueDate: new Date("2026-03-01"), totalAmount: 4500, paidAt: null, paidAmount: null, dineroGuid: null, reminderCount: 2, lastReminderAt: new Date("2026-03-12"), notes: "Algebehandling" });
     this.createInvoice({ jobId: null, customerId: 2, invoiceNumber: "KMH-2026-0005", status: "draft", issueDate: new Date("2026-03-18"), dueDate: new Date("2026-04-01"), totalAmount: 2750, paidAt: null, paidAmount: null, dineroGuid: null, reminderCount: 0, lastReminderAt: null, notes: "Kladde — venter på godkendelse" });
+    // More paid invoices for meaningful reports
+    this.createInvoice({ jobId: 5, customerId: 6, invoiceNumber: "KMH-2026-0006", status: "paid", issueDate: new Date("2026-01-26"), dueDate: new Date("2026-02-09"), totalAmount: 2100, paidAt: new Date("2026-02-05"), paidAmount: 2100, dineroGuid: null, reminderCount: 0, lastReminderAt: null, notes: "Hækklipning" });
+    this.createInvoice({ jobId: 4, customerId: 4, invoiceNumber: "KMH-2026-0007", status: "paid", issueDate: new Date("2026-02-16"), dueDate: new Date("2026-03-02"), totalAmount: 3000, paidAt: new Date("2026-02-28"), paidAmount: 3000, dineroGuid: null, reminderCount: 0, lastReminderAt: null, notes: "Vinduespudsning" });
+    this.createInvoice({ jobId: 8, customerId: 1, invoiceNumber: "KMH-2026-0008", status: "paid", issueDate: new Date("2026-01-11"), dueDate: new Date("2026-01-25"), totalAmount: 5600, paidAt: new Date("2026-01-20"), paidAmount: 5600, dineroGuid: null, reminderCount: 0, lastReminderAt: null, notes: "Facade behandling" });
+    this.createInvoice({ jobId: 9, customerId: 5, invoiceNumber: "KMH-2026-0009", status: "paid", issueDate: new Date("2026-02-21"), dueDate: new Date("2026-03-07"), totalAmount: 4000, paidAt: new Date("2026-03-05"), paidAmount: 4000, dineroGuid: null, reminderCount: 0, lastReminderAt: null, notes: "Indkørsel renset" });
+    this.createInvoice({ jobId: null, customerId: 3, invoiceNumber: "KMH-2026-0010", status: "paid", issueDate: new Date("2026-03-10"), dueDate: new Date("2026-03-24"), totalAmount: 3200, paidAt: new Date("2026-03-15"), paidAmount: 3200, dineroGuid: null, reminderCount: 0, lastReminderAt: null, notes: "Kvartalsvis haveservice" });
 
     // Seed invoice lines
     this.createInvoiceLine({ invoiceId: 1, description: "Vinduespudsning ude/inde", quantity: 50, unitLabel: "stk", unitPrice: 75, lineTotal: 3750, sortOrder: 0 });
@@ -171,6 +203,11 @@ export class MemStorage implements IStorage {
     this.createInvoiceLine({ invoiceId: 3, description: "Græsslåning", quantity: 600, unitLabel: "m²", unitPrice: 8, lineTotal: 4800, sortOrder: 1 });
     this.createInvoiceLine({ invoiceId: 4, description: "Algebehandling af tag", quantity: 100, unitLabel: "m²", unitPrice: 45, lineTotal: 4500, sortOrder: 0 });
     this.createInvoiceLine({ invoiceId: 5, description: "Højtryksvask af fliser", quantity: 50, unitLabel: "m²", unitPrice: 55, lineTotal: 2750, sortOrder: 0 });
+    this.createInvoiceLine({ invoiceId: 6, description: "Hækklipning", quantity: 60, unitLabel: "meter", unitPrice: 35, lineTotal: 2100, sortOrder: 0 });
+    this.createInvoiceLine({ invoiceId: 7, description: "Vinduespudsning ude/inde", quantity: 40, unitLabel: "stk", unitPrice: 75, lineTotal: 3000, sortOrder: 0 });
+    this.createInvoiceLine({ invoiceId: 8, description: "Algebehandling af facade", quantity: 140, unitLabel: "m²", unitPrice: 40, lineTotal: 5600, sortOrder: 0 });
+    this.createInvoiceLine({ invoiceId: 9, description: "Rens af indkørsel", quantity: 80, unitLabel: "m²", unitPrice: 50, lineTotal: 4000, sortOrder: 0 });
+    this.createInvoiceLine({ invoiceId: 10, description: "Kvartalsvis haveservice", quantity: 1, unitLabel: "stk", unitPrice: 3200, lineTotal: 3200, sortOrder: 0 });
 
     // Seed payment reminders
     this.createPaymentReminder({ invoiceId: 4, reminderNumber: 1, sentAt: new Date("2026-03-05"), type: "email", status: "sent" });
@@ -185,6 +222,16 @@ export class MemStorage implements IStorage {
     this.createCommunication({ customerId: 2, jobId: 3, quoteId: null, type: "email", direction: "outbound", subject: "Faktura KMH-2026-0001 — 3.750,00 kr.", body: "Faktura sendt for vinduespudsning." });
     this.createCommunication({ customerId: 1, jobId: null, quoteId: null, type: "email", direction: "outbound", subject: "Rykker 1 — Faktura KMH-2026-0004", body: "Første rykker sendt for forfalden faktura." });
     this.createCommunication({ customerId: 1, jobId: null, quoteId: null, type: "email", direction: "outbound", subject: "Rykker 2 — Faktura KMH-2026-0004", body: "Anden rykker sendt for forfalden faktura." });
+
+    // Seed leads across different stages
+    this.createLead({ name: "Hans Mortensen", email: "hans@nybyg.dk", phone: "+45 88990011", address: "Kirkegade 5, 6000 Kolding", source: "website", stage: "new", notes: "Ønsker tilbud på algebehandling af carport", estimatedValue: 3500, assignedUserId: null, customerId: null, quoteId: null });
+    this.createLead({ name: "Inge Larsen", email: "inge@privat.dk", phone: "+45 99001122", address: "Parkvej 18, 7100 Vejle", source: "phone", stage: "contacted", notes: "Ringet ind — interesseret i haveservice", estimatedValue: 5000, assignedUserId: 1, customerId: null, quoteId: null });
+    this.createLead({ name: "Jens Rasmussen", email: "jens@firma.dk", phone: "+45 11223344", address: "Industrivej 42, 8600 Silkeborg", source: "referral", stage: "quote_sent", notes: "Tilbud sendt på højtryksvask", estimatedValue: 8500, assignedUserId: 1, customerId: null, quoteId: null });
+    this.createLead({ name: "Karen Madsen", email: "karen@bolig.dk", phone: "+45 22334456", address: "Skovvej 7, 3400 Hillerød", source: "website", stage: "accepted", notes: "Accepteret tilbud — skal oprettes som kunde", estimatedValue: 4200, assignedUserId: 1, customerId: null, quoteId: null });
+    this.createLead({ name: "Lars Christensen", email: "lars@erhverv.dk", phone: "+45 33445577", address: "Torvet 1, 4600 Køge", source: "referral", stage: "completed", notes: "Konverteret til kunde og job udført", estimatedValue: 6000, assignedUserId: 1, customerId: 4, quoteId: null });
+    this.createLead({ name: "Mette Andersen", email: "mette@mail.dk", phone: "+45 44556688", address: "Bakkevej 22, 5200 Odense V", source: "phone", stage: "lost", notes: "Valgte anden leverandør — for høj pris", estimatedValue: 12000, assignedUserId: 1, customerId: null, quoteId: null });
+    this.createLead({ name: "Niels Eriksen", email: null, phone: "+45 55667799", address: "Åboulevarden 30, 8000 Aarhus C", source: "website", stage: "new", notes: "Udfyldt kontaktformular", estimatedValue: null, assignedUserId: null, customerId: null, quoteId: null });
+    this.createLead({ name: "Pernille Holm", email: "pernille@villa.dk", phone: "+45 66778800", address: "Rosenvej 12, 2800 Lyngby", source: "referral", stage: "contacted", notes: "Henvist af Dorthe Nielsen — vil have vinduespudsning", estimatedValue: 2800, assignedUserId: 1, customerId: null, quoteId: null });
   }
 
   // Users
@@ -217,7 +264,7 @@ export class MemStorage implements IStorage {
   }
   async createCustomer(data: InsertCustomer): Promise<Customer> {
     const id = this.nextId.customers++;
-    const customer: Customer = { id, name: data.name, email: data.email ?? null, phone: data.phone ?? null, addressLine1: data.addressLine1 ?? null, postalCode: data.postalCode ?? null, city: data.city ?? null, cvr: data.cvr ?? null, notes: data.notes ?? null, tags: data.tags ?? null, gdprConsentAt: data.gdprConsentAt ?? null, createdAt: new Date() };
+    const customer: Customer = { id, name: data.name, email: data.email ?? null, phone: data.phone ?? null, addressLine1: data.addressLine1 ?? null, postalCode: data.postalCode ?? null, city: data.city ?? null, cvr: data.cvr ?? null, notes: data.notes ?? null, tags: data.tags ?? null, latitude: data.latitude ?? null, longitude: data.longitude ?? null, gdprConsentAt: data.gdprConsentAt ?? null, createdAt: new Date() };
     this.customers.set(id, customer);
     return customer;
   }
@@ -466,6 +513,44 @@ export class MemStorage implements IStorage {
     const updated = { ...existing, ...data };
     this.serviceAgreementsMap.set(id, updated);
     return updated;
+  }
+
+  // Leads
+  async getLeads(): Promise<Lead[]> {
+    return Array.from(this.leadsMap.values());
+  }
+  async getLead(id: number): Promise<Lead | undefined> {
+    return this.leadsMap.get(id);
+  }
+  async createLead(data: InsertLead): Promise<Lead> {
+    const id = this.nextId.leads++;
+    const lead: Lead = {
+      id,
+      name: data.name,
+      email: data.email ?? null,
+      phone: data.phone ?? null,
+      address: data.address ?? null,
+      source: data.source ?? "website",
+      stage: data.stage ?? "new",
+      notes: data.notes ?? null,
+      estimatedValue: data.estimatedValue ?? null,
+      assignedUserId: data.assignedUserId ?? null,
+      customerId: data.customerId ?? null,
+      quoteId: data.quoteId ?? null,
+      createdAt: new Date(),
+    };
+    this.leadsMap.set(id, lead);
+    return lead;
+  }
+  async updateLead(id: number, data: Partial<InsertLead>): Promise<Lead | undefined> {
+    const existing = this.leadsMap.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...data };
+    this.leadsMap.set(id, updated);
+    return updated;
+  }
+  async deleteLead(id: number): Promise<boolean> {
+    return this.leadsMap.delete(id);
   }
 
   getNextInvoiceNumber(): string {

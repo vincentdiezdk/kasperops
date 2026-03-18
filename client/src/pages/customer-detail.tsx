@@ -35,7 +35,18 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Link } from "wouter";
-import { ArrowLeft, Phone, Mail, MapPin, Edit } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ArrowLeft, Phone, Mail, MapPin, Edit, ShieldAlert } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { formatDate, formatDKK, getStatusLabel, getStatusColor } from "@/lib/formatters";
 import type { Customer, Quote, Job, Communication } from "@shared/schema";
 
@@ -43,7 +54,9 @@ export default function CustomerDetailPage() {
   const [, params] = useRoute("/customers/:id");
   const [, navigate] = useHashLocation();
   const customerId = Number(params?.id);
+  const { toast } = useToast();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [anonymizeDialogOpen, setAnonymizeDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("tilbud");
 
   const { data: customer, isLoading } = useQuery<Customer>({
@@ -69,6 +82,16 @@ export default function CustomerDetailPage() {
       queryClient.invalidateQueries({ queryKey: [`/api/customers/${customerId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
       setEditDialogOpen(false);
+    },
+  });
+
+  const anonymizeMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/customers/${customerId}/anonymize`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/customers/${customerId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      setAnonymizeDialogOpen(false);
+      toast({ title: "Kunde anonymiseret" });
     },
   });
 
@@ -175,6 +198,19 @@ export default function CustomerDetailPage() {
             )}
             {customer.notes && (
               <div className="text-sm mt-2 p-3 bg-muted rounded-lg">{customer.notes}</div>
+            )}
+            {customer.name !== "[SLETTET]" && (
+              <div className="pt-4 border-t mt-4">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setAnonymizeDialogOpen(true)}
+                  data-testid="anonymize-customer-btn"
+                >
+                  <ShieldAlert className="h-4 w-4 mr-2" />Anonymiser kunde
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -304,6 +340,28 @@ export default function CustomerDetailPage() {
           </Tabs>
         </div>
       </div>
+
+      {/* GDPR Anonymize dialog */}
+      <AlertDialog open={anonymizeDialogOpen} onOpenChange={setAnonymizeDialogOpen}>
+        <AlertDialogContent data-testid="anonymize-confirm-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Anonymiser kunde?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Er du sikker? Denne handling kan ikke fortrydes. Kundens persondata erstattes med [SLETTET].
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuller</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => anonymizeMutation.mutate()}
+              data-testid="confirm-anonymize-btn"
+            >
+              Anonymiser
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Edit dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>

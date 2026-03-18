@@ -18,6 +18,9 @@ import AgreementsPage from "@/pages/agreements";
 import AgreementDetailPage from "@/pages/agreement-detail";
 import PricesPage from "@/pages/prices";
 import SettingsPage from "@/pages/settings";
+import RoutePlanningPage from "@/pages/route-planning";
+import LeadsPage from "@/pages/leads";
+import ReportsPage from "@/pages/reports";
 import NotFound from "@/pages/not-found";
 
 function AppRouter() {
@@ -25,8 +28,10 @@ function AppRouter() {
     <AppLayout>
       <Switch>
         <Route path="/" component={Dashboard} />
+        <Route path="/route" component={RoutePlanningPage} />
         <Route path="/customers/:id" component={CustomerDetailPage} />
         <Route path="/customers" component={CustomersPage} />
+        <Route path="/leads" component={LeadsPage} />
         <Route path="/quotes/:id" component={QuoteDetailPage} />
         <Route path="/quotes" component={QuotesPage} />
         <Route path="/jobs/:id" component={JobDetailPage} />
@@ -36,6 +41,7 @@ function AppRouter() {
         <Route path="/agreements/:id" component={AgreementDetailPage} />
         <Route path="/agreements" component={AgreementsPage} />
         <Route path="/prices" component={PricesPage} />
+        <Route path="/reports" component={ReportsPage} />
         <Route path="/settings" component={SettingsPage} />
         <Route component={NotFound} />
       </Switch>
