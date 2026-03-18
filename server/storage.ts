@@ -1,0 +1,266 @@
+import {
+  type User, type InsertUser,
+  type Customer, type InsertCustomer,
+  type PriceItem, type InsertPriceItem,
+  type Quote, type InsertQuote,
+  type QuoteLine, type InsertQuoteLine,
+  type Job, type InsertJob,
+  type Communication, type InsertCommunication,
+} from "@shared/schema";
+
+export interface IStorage {
+  // Users
+  getUsers(): Promise<User[]>;
+  getUser(id: number): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
+
+  // Customers
+  getCustomers(): Promise<Customer[]>;
+  getCustomer(id: number): Promise<Customer | undefined>;
+  createCustomer(customer: InsertCustomer): Promise<Customer>;
+  updateCustomer(id: number, customer: Partial<InsertCustomer>): Promise<Customer | undefined>;
+  deleteCustomer(id: number): Promise<boolean>;
+
+  // Price Items
+  getPriceItems(): Promise<PriceItem[]>;
+  getPriceItem(id: number): Promise<PriceItem | undefined>;
+  createPriceItem(item: InsertPriceItem): Promise<PriceItem>;
+  updatePriceItem(id: number, item: Partial<InsertPriceItem>): Promise<PriceItem | undefined>;
+  deletePriceItem(id: number): Promise<boolean>;
+
+  // Quotes
+  getQuotes(): Promise<Quote[]>;
+  getQuote(id: number): Promise<Quote | undefined>;
+  createQuote(quote: InsertQuote): Promise<Quote>;
+  updateQuote(id: number, quote: Partial<InsertQuote>): Promise<Quote | undefined>;
+  deleteQuote(id: number): Promise<boolean>;
+
+  // Quote Lines
+  getQuoteLines(quoteId: number): Promise<QuoteLine[]>;
+  createQuoteLine(line: InsertQuoteLine): Promise<QuoteLine>;
+  updateQuoteLine(id: number, line: Partial<InsertQuoteLine>): Promise<QuoteLine | undefined>;
+  deleteQuoteLine(id: number): Promise<boolean>;
+  deleteQuoteLinesByQuoteId(quoteId: number): Promise<void>;
+
+  // Jobs
+  getJobs(): Promise<Job[]>;
+  getJob(id: number): Promise<Job | undefined>;
+  createJob(job: InsertJob): Promise<Job>;
+  updateJob(id: number, job: Partial<InsertJob>): Promise<Job | undefined>;
+  deleteJob(id: number): Promise<boolean>;
+
+  // Communications
+  getCommunications(customerId?: number): Promise<Communication[]>;
+  createCommunication(comm: InsertCommunication): Promise<Communication>;
+}
+
+export class MemStorage implements IStorage {
+  private users: Map<number, User> = new Map();
+  private customers: Map<number, Customer> = new Map();
+  private priceItems: Map<number, PriceItem> = new Map();
+  private quotes: Map<number, Quote> = new Map();
+  private quoteLines: Map<number, QuoteLine> = new Map();
+  private jobs: Map<number, Job> = new Map();
+  private communications: Map<number, Communication> = new Map();
+
+  private nextId = { users: 1, customers: 1, priceItems: 1, quotes: 1, quoteLines: 1, jobs: 1, communications: 1 };
+
+  constructor() {
+    this.seed();
+  }
+
+  private seed() {
+    // Seed admin user
+    this.createUser({ email: "kasper@kaspermh.dk", name: "Kasper MH", role: "admin", phone: "+45 12345678", avatarUrl: null, isActive: true });
+
+    // Seed some customers
+    this.createCustomer({ name: "Anders Jensen", email: "anders@example.dk", phone: "+45 22334455", addressLine1: "Nørregade 12", postalCode: "2100", city: "København Ø", cvr: null, notes: "Fast kunde", tags: ["privat"], gdprConsentAt: null });
+    this.createCustomer({ name: "Birthe Sørensen", email: "birthe@firma.dk", phone: "+45 33445566", addressLine1: "Vestergade 8", postalCode: "5000", city: "Odense C", cvr: "12345678", notes: null, tags: ["erhverv"], gdprConsentAt: null });
+    this.createCustomer({ name: "Carl Petersen", email: "carl@bolig.dk", phone: "+45 44556677", addressLine1: "Søndergade 22", postalCode: "8000", city: "Aarhus C", cvr: null, notes: "Stor have", tags: ["privat"], gdprConsentAt: null });
+
+    // Seed price items
+    this.createPriceItem({ category: "Algebehandling", name: "Algebehandling af tag", description: "Professionel algebehandling af hele taget", unitLabel: "m²", unitPrice: 45, isActive: true });
+    this.createPriceItem({ category: "Algebehandling", name: "Algebehandling af facade", description: "Behandling af facadevæg", unitLabel: "m²", unitPrice: 40, isActive: true });
+    this.createPriceItem({ category: "Rens af fliser", name: "Højtryksvask af fliser", description: "Grundig rensning med højtryksrenser", unitLabel: "m²", unitPrice: 55, isActive: true });
+    this.createPriceItem({ category: "Rens af fliser", name: "Rens af indkørsel", description: "Komplet rensning af indkørsel", unitLabel: "m²", unitPrice: 50, isActive: true });
+    this.createPriceItem({ category: "Vinduespudsning", name: "Vinduespudsning ude/inde", description: "Pudsning af vinduer ind- og udvendig", unitLabel: "stk", unitPrice: 75, isActive: true });
+    this.createPriceItem({ category: "Haveservice", name: "Hækklipning", description: "Klipning af hæk op til 2m", unitLabel: "meter", unitPrice: 35, isActive: true });
+    this.createPriceItem({ category: "Haveservice", name: "Græsslåning", description: "Slåning af græsplæne", unitLabel: "m²", unitPrice: 8, isActive: true });
+
+    // Seed some quotes
+    this.createQuote({ customerId: 1, title: "Algebehandling af tag — Nørregade 12", status: "sent", validUntil: new Date("2026-04-15"), notes: "Tilbud sendt per email", totalAmount: 4500, acceptToken: null, acceptedAt: null, sentAt: new Date("2026-03-10") });
+    this.createQuote({ customerId: 2, title: "Rens af fliser — Vestergade 8", status: "draft", validUntil: new Date("2026-04-20"), notes: null, totalAmount: 2750, acceptToken: null, acceptedAt: null, sentAt: null });
+    this.createQuote({ customerId: 3, title: "Komplet haveservice — Søndergade 22", status: "accepted", validUntil: new Date("2026-05-01"), notes: "Accepteret per telefon", totalAmount: 6200, acceptToken: null, acceptedAt: new Date("2026-03-15"), sentAt: new Date("2026-03-12") });
+
+    // Seed quote lines
+    this.createQuoteLine({ quoteId: 1, priceItemId: 1, description: "Algebehandling af tag", quantity: 100, unitLabel: "m²", unitPrice: 45, lineTotal: 4500, sortOrder: 0 });
+    this.createQuoteLine({ quoteId: 2, priceItemId: 3, description: "Højtryksvask af fliser", quantity: 50, unitLabel: "m²", unitPrice: 55, lineTotal: 2750, sortOrder: 0 });
+    this.createQuoteLine({ quoteId: 3, priceItemId: 6, description: "Hækklipning", quantity: 40, unitLabel: "meter", unitPrice: 35, lineTotal: 1400, sortOrder: 0 });
+    this.createQuoteLine({ quoteId: 3, priceItemId: 7, description: "Græsslåning", quantity: 600, unitLabel: "m²", unitPrice: 8, lineTotal: 4800, sortOrder: 1 });
+
+    // Seed some jobs
+    this.createJob({ quoteId: 3, customerId: 3, assignedUserId: 1, title: "Haveservice — Søndergade 22", description: "Komplet haveservice inkl. hæk og græs", status: "planned", scheduledDate: new Date("2026-03-20"), startedAt: null, completedAt: null, addressLine1: "Søndergade 22", postalCode: "8000", city: "Aarhus C", completionNotes: null });
+    this.createJob({ quoteId: 1, customerId: 1, assignedUserId: 1, title: "Algebehandling — Nørregade 12", description: "Algebehandling af tag", status: "in_progress", scheduledDate: new Date("2026-03-18"), startedAt: new Date("2026-03-18T08:00:00"), completedAt: null, addressLine1: "Nørregade 12", postalCode: "2100", city: "København Ø", completionNotes: null });
+    this.createJob({ quoteId: null, customerId: 2, assignedUserId: 1, title: "Vinduespudsning — Vestergade 8", description: "Pudsning af alle vinduer", status: "completed", scheduledDate: new Date("2026-03-15"), startedAt: new Date("2026-03-15T09:00:00"), completedAt: new Date("2026-03-15T13:00:00"), addressLine1: "Vestergade 8", postalCode: "5000", city: "Odense C", completionNotes: "Alle vinduer pudset, kunden tilfreds" });
+  }
+
+  // Users
+  async getUsers(): Promise<User[]> {
+    return Array.from(this.users.values());
+  }
+  async getUser(id: number): Promise<User | undefined> {
+    return this.users.get(id);
+  }
+  async createUser(data: InsertUser): Promise<User> {
+    const id = this.nextId.users++;
+    const user: User = { id, email: data.email, name: data.name, role: data.role ?? "employee", phone: data.phone ?? null, avatarUrl: data.avatarUrl ?? null, isActive: data.isActive ?? true };
+    this.users.set(id, user);
+    return user;
+  }
+  async updateUser(id: number, data: Partial<InsertUser>): Promise<User | undefined> {
+    const existing = this.users.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...data };
+    this.users.set(id, updated);
+    return updated;
+  }
+
+  // Customers
+  async getCustomers(): Promise<Customer[]> {
+    return Array.from(this.customers.values());
+  }
+  async getCustomer(id: number): Promise<Customer | undefined> {
+    return this.customers.get(id);
+  }
+  async createCustomer(data: InsertCustomer): Promise<Customer> {
+    const id = this.nextId.customers++;
+    const customer: Customer = { id, name: data.name, email: data.email ?? null, phone: data.phone ?? null, addressLine1: data.addressLine1 ?? null, postalCode: data.postalCode ?? null, city: data.city ?? null, cvr: data.cvr ?? null, notes: data.notes ?? null, tags: data.tags ?? null, gdprConsentAt: data.gdprConsentAt ?? null, createdAt: new Date() };
+    this.customers.set(id, customer);
+    return customer;
+  }
+  async updateCustomer(id: number, data: Partial<InsertCustomer>): Promise<Customer | undefined> {
+    const existing = this.customers.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...data };
+    this.customers.set(id, updated);
+    return updated;
+  }
+  async deleteCustomer(id: number): Promise<boolean> {
+    return this.customers.delete(id);
+  }
+
+  // Price Items
+  async getPriceItems(): Promise<PriceItem[]> {
+    return Array.from(this.priceItems.values());
+  }
+  async getPriceItem(id: number): Promise<PriceItem | undefined> {
+    return this.priceItems.get(id);
+  }
+  async createPriceItem(data: InsertPriceItem): Promise<PriceItem> {
+    const id = this.nextId.priceItems++;
+    const item: PriceItem = { id, category: data.category, name: data.name, description: data.description ?? null, unitLabel: data.unitLabel ?? "stk", unitPrice: data.unitPrice, isActive: data.isActive ?? true };
+    this.priceItems.set(id, item);
+    return item;
+  }
+  async updatePriceItem(id: number, data: Partial<InsertPriceItem>): Promise<PriceItem | undefined> {
+    const existing = this.priceItems.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...data };
+    this.priceItems.set(id, updated);
+    return updated;
+  }
+  async deletePriceItem(id: number): Promise<boolean> {
+    return this.priceItems.delete(id);
+  }
+
+  // Quotes
+  async getQuotes(): Promise<Quote[]> {
+    return Array.from(this.quotes.values());
+  }
+  async getQuote(id: number): Promise<Quote | undefined> {
+    return this.quotes.get(id);
+  }
+  async createQuote(data: InsertQuote): Promise<Quote> {
+    const id = this.nextId.quotes++;
+    const quote: Quote = { id, customerId: data.customerId, title: data.title, status: data.status ?? "draft", validUntil: data.validUntil ?? null, notes: data.notes ?? null, totalAmount: data.totalAmount ?? 0, acceptToken: data.acceptToken ?? null, acceptedAt: data.acceptedAt ?? null, sentAt: data.sentAt ?? null, createdAt: new Date() };
+    this.quotes.set(id, quote);
+    return quote;
+  }
+  async updateQuote(id: number, data: Partial<InsertQuote>): Promise<Quote | undefined> {
+    const existing = this.quotes.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...data };
+    this.quotes.set(id, updated);
+    return updated;
+  }
+  async deleteQuote(id: number): Promise<boolean> {
+    return this.quotes.delete(id);
+  }
+
+  // Quote Lines
+  async getQuoteLines(quoteId: number): Promise<QuoteLine[]> {
+    return Array.from(this.quoteLines.values()).filter(l => l.quoteId === quoteId).sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  async createQuoteLine(data: InsertQuoteLine): Promise<QuoteLine> {
+    const id = this.nextId.quoteLines++;
+    const line: QuoteLine = { id, quoteId: data.quoteId, priceItemId: data.priceItemId ?? null, description: data.description, quantity: data.quantity ?? 1, unitLabel: data.unitLabel ?? "stk", unitPrice: data.unitPrice, lineTotal: data.lineTotal, sortOrder: data.sortOrder ?? 0 };
+    this.quoteLines.set(id, line);
+    return line;
+  }
+  async updateQuoteLine(id: number, data: Partial<InsertQuoteLine>): Promise<QuoteLine | undefined> {
+    const existing = this.quoteLines.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...data };
+    this.quoteLines.set(id, updated);
+    return updated;
+  }
+  async deleteQuoteLine(id: number): Promise<boolean> {
+    return this.quoteLines.delete(id);
+  }
+  async deleteQuoteLinesByQuoteId(quoteId: number): Promise<void> {
+    const entries = Array.from(this.quoteLines.entries());
+    for (const [id, line] of entries) {
+      if (line.quoteId === quoteId) this.quoteLines.delete(id);
+    }
+  }
+
+  // Jobs
+  async getJobs(): Promise<Job[]> {
+    return Array.from(this.jobs.values());
+  }
+  async getJob(id: number): Promise<Job | undefined> {
+    return this.jobs.get(id);
+  }
+  async createJob(data: InsertJob): Promise<Job> {
+    const id = this.nextId.jobs++;
+    const job: Job = { id, quoteId: data.quoteId ?? null, customerId: data.customerId, assignedUserId: data.assignedUserId ?? null, title: data.title, description: data.description ?? null, status: data.status ?? "planned", scheduledDate: data.scheduledDate ?? null, startedAt: data.startedAt ?? null, completedAt: data.completedAt ?? null, addressLine1: data.addressLine1 ?? null, postalCode: data.postalCode ?? null, city: data.city ?? null, completionNotes: data.completionNotes ?? null, createdAt: new Date() };
+    this.jobs.set(id, job);
+    return job;
+  }
+  async updateJob(id: number, data: Partial<InsertJob>): Promise<Job | undefined> {
+    const existing = this.jobs.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...data };
+    this.jobs.set(id, updated);
+    return updated;
+  }
+  async deleteJob(id: number): Promise<boolean> {
+    return this.jobs.delete(id);
+  }
+
+  // Communications
+  async getCommunications(customerId?: number): Promise<Communication[]> {
+    const all = Array.from(this.communications.values());
+    if (customerId !== undefined) return all.filter(c => c.customerId === customerId);
+    return all;
+  }
+  async createCommunication(data: InsertCommunication): Promise<Communication> {
+    const id = this.nextId.communications++;
+    const comm: Communication = { id, customerId: data.customerId, jobId: data.jobId ?? null, quoteId: data.quoteId ?? null, type: data.type, direction: data.direction, subject: data.subject ?? null, body: data.body ?? null, sentAt: new Date() };
+    this.communications.set(id, comm);
+    return comm;
+  }
+}
+
+export const storage = new MemStorage();
